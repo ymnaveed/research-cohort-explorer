@@ -1,0 +1,22 @@
+services:
+  postgres:
+    image: postgres:16
+    container_name: research-cohort-postgres
+
+    environment:
+      POSTGRES_DB: research_cohort
+      POSTGRES_USER: research_admin
+      POSTGRES_PASSWORD: research_dev_password
+
+    ports:
+      - "5432:5432"
+
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./database/init.sql:/docker-entrypoint-initdb.d/01-init.sql
+      - ./database/schema/002_reference_tables.sql:/docker-entrypoint-initdb.d/02-reference-tables.sql
+      - ./database/schema/003_core_tables.sql:/docker-entrypoint-initdb.d/03-core-tables.sql
+      - ./database/seed/reference_data.sql:/docker-entrypoint-initdb.d/04-reference-data.sql
+
+volumes:
+  postgres_data:
