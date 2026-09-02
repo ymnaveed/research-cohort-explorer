@@ -5,8 +5,8 @@
 
 SEED = 20260827
 
-# Start small during development.
-PATIENT_COUNT = 1_000
+# Portfolio-scale synthetic dataset.
+PATIENT_COUNT = 100_000
 
 
 # ------------------------------------------------------------
