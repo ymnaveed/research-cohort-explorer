@@ -12,6 +12,7 @@ OUTPUT_DIR = BASE_DIR / "output"
 
 PATIENTS_FILE = OUTPUT_DIR / "patients.csv"
 ENCOUNTERS_FILE = OUTPUT_DIR / "encounters.csv"
+DIAGNOSES_FILE = OUTPUT_DIR / "diagnoses.csv"
 OUTPUT_FILE = OUTPUT_DIR / "labs.csv"
 
 STUDY_START_DATE = datetime(2015, 1, 1)
@@ -77,10 +78,24 @@ DISEASE_CODES = {
 def load_patients():
     patients = []
 
-    with PATIENTS_FILE.open("r", newline="", encoding="utf-8") as csv_file:
+    with PATIENTS_FILE.open(
+        "r",
+        newline="",
+        encoding="utf-8",
+    ) as csv_file:
+
         reader = csv.DictReader(csv_file)
 
         for row in reader:
+            row["date_of_birth"] = datetime.strptime(
+                row["date_of_birth"],
+                "%Y-%m-%d",
+            ).replace(
+                hour=0,
+                minute=0,
+                second=0,
+            )
+
             patients.append(row)
 
     return patients
@@ -89,11 +104,19 @@ def load_patients():
 def load_encounters():
     encounters = []
 
-    with ENCOUNTERS_FILE.open("r", newline="", encoding="utf-8") as csv_file:
+    with ENCOUNTERS_FILE.open(
+        "r",
+        newline="",
+        encoding="utf-8",
+    ) as csv_file:
+
         reader = csv.DictReader(csv_file)
 
         for row in reader:
-            row["encounter_id"] = int(row["encounter_id"])
+            row["encounter_id"] = int(
+                row["encounter_id"]
+            )
+
             row["encounter_date"] = datetime.fromisoformat(
                 row["encounter_date"]
             )
@@ -103,12 +126,75 @@ def load_encounters():
     return encounters
 
 
+def load_diagnoses():
+    diagnoses = []
+
+    with DIAGNOSES_FILE.open(
+        "r",
+        newline="",
+        encoding="utf-8",
+    ) as csv_file:
+
+        reader = csv.DictReader(csv_file)
+
+        for row in reader:
+            diagnoses.append(row)
+
+    return diagnoses
+
+
+def build_diagnosis_index(diagnoses):
+    diagnosis_by_patient = {}
+
+    for row in diagnoses:
+        research_id = row["research_id"]
+
+        diagnosis_by_patient.setdefault(
+            research_id,
+            set(),
+        ).add(
+            row["diagnosis_code"]
+        )
+
+    return diagnosis_by_patient
+
+
+def get_patient_diseases(
+    research_id,
+    diagnosis_by_patient,
+):
+    codes = diagnosis_by_patient.get(
+        research_id,
+        set(),
+    )
+
+    diseases = set()
+
+    if DISEASE_CODES["diabetes"] in codes:
+        diseases.add("diabetes")
+
+    if DISEASE_CODES["hypertension"] in codes:
+        diseases.add("hypertension")
+
+    if DISEASE_CODES["hyperlipidemia"] in codes:
+        diseases.add("hyperlipidemia")
+
+    if DISEASE_CODES["ckd"] in codes:
+        diseases.add("ckd")
+
+    if DISEASE_CODES["ascvd"] in codes:
+        diseases.add("ascvd")
+
+    return diseases
+
+
 def choose_lab_tests():
     """
     Select 1-4 tests for a laboratory event.
 
     This creates a mixture of routine and clinically targeted testing.
     """
+
     test_count = random.choices(
         [1, 2, 3, 4],
         weights=[0.30, 0.35, 0.25, 0.10],
@@ -117,129 +203,124 @@ def choose_lab_tests():
 
     return random.sample(
         list(LAB_TESTS.keys()),
-        k=test_count,
+        test_count,
     )
 
 
-def choose_measurement_date(patient_encounters):
+def choose_measurement_date(
+    patient_encounters,
+    date_of_birth,
+):
     """
     Prefer encounter-linked measurements.
 
     Approximately 65% of lab events will be associated with an
     existing encounter. Otherwise, generate an independent measurement
-    date inside the study period.
+    date between the patient's date of birth and the study end date.
     """
 
     if patient_encounters and random.random() < 0.65:
-        encounter = random.choice(patient_encounters)
+        encounter = random.choice(
+            patient_encounters
+        )
 
         return (
             encounter["encounter_id"],
             encounter["encounter_date"],
         )
 
+    earliest_valid_date = max(
+        STUDY_START_DATE,
+        date_of_birth,
+    )
+
     random_seconds = random.randint(
         0,
         int(
             (
                 STUDY_END_DATE
-                - STUDY_START_DATE
+                - earliest_valid_date
             ).total_seconds()
         ),
     )
 
-    result_date = STUDY_START_DATE + timedelta(
-        seconds=random_seconds
+    result_date = (
+        earliest_valid_date
+        + timedelta(seconds=random_seconds)
     )
 
     return None, result_date
 
 
-def get_patient_diseases(patient_id, diagnosis_by_patient):
+def generate_value(
+    test_code,
+    diseases,
+):
     """
-    Return the synthetic disease profile for a patient.
-    """
+    Generate a clinically plausible synthetic laboratory value.
 
-    return diagnosis_by_patient.get(patient_id, set())
-
-
-def generate_value(test_code, diseases):
-    """
-    Generate a clinically correlated synthetic laboratory result.
+    Disease conditions shift the expected value while preserving
+    random variation.
     """
 
-    definition = LAB_TESTS[test_code]
+    config = LAB_TESTS[test_code]
 
-    mean = definition["baseline_mean"]
-    sd = definition["baseline_sd"]
-
-    # ------------------------------------------------------------
-    # Disease-specific shifts
-    # ------------------------------------------------------------
+    mean = config["baseline_mean"]
+    sd = config["baseline_sd"]
 
     if test_code == "BP_SYS":
-        if "I10" in diseases:
-            mean += 28
+        if "hypertension" in diseases:
+            mean += 25
 
-        if "I25.10" in diseases:
+        if "ckd" in diseases:
             mean += 8
 
     elif test_code == "GLUCOSE":
-        if "E11.9" in diseases:
-            mean += 45
+        if "diabetes" in diseases:
+            mean += 55
 
-        if "N18.3" in diseases:
+        elif "ckd" in diseases:
             mean += 8
 
     elif test_code == "HBA1C":
-        if "E11.9" in diseases:
-            mean += 2.2
-
-        if "N18.3" in diseases:
-            mean += 0.3
+        if "diabetes" in diseases:
+            mean += 2.5
 
     elif test_code == "CREAT":
-        if "N18.3" in diseases:
-            mean += 1.4
-
-        if "E11.9" in diseases:
-            mean += 0.15
-
-        if "I10" in diseases:
-            mean += 0.10
+        if "ckd" in diseases:
+            mean += 1.5
 
     elif test_code == "LDL":
-        if "E78.5" in diseases:
-            mean += 45
+        if "hyperlipidemia" in diseases:
+            mean += 55
 
-        if "I25.10" in diseases:
+        if "ascvd" in diseases:
             mean += 20
 
     elif test_code == "HDL":
-        if "E78.5" in diseases:
-            mean -= 8
-
-        if "I25.10" in diseases:
+        if "diabetes" in diseases:
             mean -= 5
 
-    value = random.gauss(mean, sd)
+        if "ascvd" in diseases:
+            mean -= 5
 
-    value = max(
-        definition["min"],
-        min(definition["max"], value),
+    value = random.gauss(
+        mean,
+        sd,
     )
 
-    # Appropriate decimal precision by test.
-    if test_code in {"BP_SYS", "GLUCOSE", "LDL", "HDL"}:
-        return round(value, 1)
+    value = max(
+        config["min"],
+        min(
+            config["max"],
+            value,
+        ),
+    )
 
-    if test_code == "HBA1C":
-        return round(value, 2)
-
-    if test_code == "CREAT":
-        return round(value, 2)
-
-    return round(value, 2)
+    return round(
+        value,
+        2,
+    )
 
 
 def generate_lab_results(
@@ -260,7 +341,9 @@ def generate_lab_results(
         encounters_by_patient.setdefault(
             encounter["research_id"],
             [],
-        ).append(encounter)
+        ).append(
+            encounter
+        )
 
     results = []
 
@@ -279,27 +362,35 @@ def generate_lab_results(
             diagnosis_by_patient,
         )
 
-        # More encounters generally produce more opportunities
-        # for laboratory testing.
-        encounter_count = len(patient_encounters)
+        encounter_count = len(
+            patient_encounters
+        )
 
         base_events = max(
             3,
             min(
                 12,
-                int(encounter_count * 0.35)
+                int(
+                    encounter_count * 0.35
+                ),
             ),
         )
 
-        # Add a small amount of independent testing.
-        additional_events = random.randint(1, 4)
+        additional_events = random.randint(
+            1,
+            4,
+        )
 
-        total_events = base_events + additional_events
+        total_events = (
+            base_events
+            + additional_events
+        )
 
         for _ in range(total_events):
 
             encounter_id, result_date = choose_measurement_date(
-                patient_encounters
+                patient_encounters,
+                patient["date_of_birth"],
             )
 
             selected_tests = choose_lab_tests()
@@ -331,44 +422,21 @@ def generate_lab_results(
     return results
 
 
-def load_diagnoses():
-    """
-    Load diagnoses from diagnoses.csv and build a patient-level
-    disease profile.
-    """
-
-    diagnoses_file = OUTPUT_DIR / "diagnoses.csv"
-
-    diagnosis_by_patient = {}
-
-    with diagnoses_file.open(
-        "r",
-        newline="",
-        encoding="utf-8",
-    ) as csv_file:
-
-        reader = csv.DictReader(csv_file)
-
-        for row in reader:
-            research_id = row["research_id"]
-            diagnosis_code = row["diagnosis_code"]
-
-            diagnosis_by_patient.setdefault(
-                research_id,
-                set(),
-            ).add(diagnosis_code)
-
-    return diagnosis_by_patient
-
-
-def validate_results(results, patients, encounters):
-    """
-    Perform Python-level validation before the CSV is loaded
-    into PostgreSQL.
-    """
+def validate_results(
+    results,
+    patients,
+    encounters,
+):
+    print()
+    print("Validation")
 
     patient_ids = {
         patient["research_id"]
+        for patient in patients
+    }
+
+    patient_map = {
+        patient["research_id"]: patient
         for patient in patients
     }
 
@@ -376,15 +444,6 @@ def validate_results(results, patients, encounters):
         encounter["encounter_id"]: encounter
         for encounter in encounters
     }
-
-    print()
-    print("Validation")
-
-    # ------------------------------------------------------------
-    # Basic row validation
-    # ------------------------------------------------------------
-
-    print(f"Rows: {len(results)}")
 
     duplicate_ids = (
         len(results)
@@ -396,57 +455,52 @@ def validate_results(results, patients, encounters):
         )
     )
 
-    print(f"Duplicate lab_result_id: {duplicate_ids}")
-
     missing_patient_ids = sum(
         1
         for row in results
-        if row["research_id"] not in patient_ids
-    )
-
-    print(
-        f"Missing research_id: {missing_patient_ids}"
+        if row["research_id"]
+        not in patient_ids
     )
 
     missing_test_codes = sum(
         1
         for row in results
-        if row["test_code"] not in LAB_TESTS
+        if row["test_code"]
+        not in LAB_TESTS
     )
-
-    print(
-        f"Invalid test_code: {missing_test_codes}"
-    )
-
-    # ------------------------------------------------------------
-    # Numeric validation
-    # ------------------------------------------------------------
 
     invalid_values = 0
 
     for row in results:
-        definition = LAB_TESTS[row["test_code"]]
+
+        if row["test_code"] not in LAB_TESTS:
+            continue
+
         value = row["result_numeric"]
 
-        if not (
-            definition["min"]
-            <= value
-            <= definition["max"]
+        config = LAB_TESTS[
+            row["test_code"]
+        ]
+
+        if value is None:
+            invalid_values += 1
+            continue
+
+        if (
+            value < config["min"]
+            or value > config["max"]
         ):
             invalid_values += 1
 
-    print(
-        f"Values outside configured range: {invalid_values}"
-    )
-
-    # ------------------------------------------------------------
-    # Date validation
-    # ------------------------------------------------------------
-
     dates_before_study = 0
     dates_after_study = 0
+    dates_before_birth = 0
+
+    invalid_encounter_links = 0
+    encounter_date_mismatches = 0
 
     for row in results:
+
         result_date = datetime.fromisoformat(
             row["result_date"]
         )
@@ -457,56 +511,35 @@ def validate_results(results, patients, encounters):
         if result_date > STUDY_END_DATE:
             dates_after_study += 1
 
-    print(
-        f"Result date before study start: {dates_before_study}"
-    )
+        patient = patient_map.get(
+            row["research_id"]
+        )
 
-    print(
-        f"Result date after study end: {dates_after_study}"
-    )
-
-    # ------------------------------------------------------------
-    # Encounter linkage validation
-    # ------------------------------------------------------------
-
-    invalid_encounter_links = 0
-    encounter_date_mismatches = 0
-
-    for row in results:
+        if (
+            patient is not None
+            and result_date < patient["date_of_birth"]
+        ):
+            dates_before_birth += 1
 
         encounter_id = row["encounter_id"]
 
-        if encounter_id is None:
-            continue
+        if encounter_id is not None:
 
-        encounter = encounter_map.get(
-            encounter_id
-        )
+            encounter = encounter_map.get(
+                encounter_id
+            )
 
-        if encounter is None:
-            invalid_encounter_links += 1
-            continue
+            if encounter is None:
+                invalid_encounter_links += 1
 
-        result_date = datetime.fromisoformat(
-            row["result_date"]
-        )
+            else:
+                if (
+                    result_date
+                    != encounter["encounter_date"]
+                ):
+                    encounter_date_mismatches += 1
 
-        if result_date != encounter["encounter_date"]:
-            encounter_date_mismatches += 1
-
-    print(
-        f"Invalid encounter links: {invalid_encounter_links}"
-    )
-
-    print(
-        f"Encounter date mismatches: {encounter_date_mismatches}"
-    )
-
-    # ------------------------------------------------------------
-    # Patient coverage
-    # ------------------------------------------------------------
-
-    patients_with_labs = len(
+    patient_coverage = len(
         {
             row["research_id"]
             for row in results
@@ -514,13 +547,57 @@ def validate_results(results, patients, encounters):
     )
 
     print(
-        f"Patients with laboratory results: "
-        f"{patients_with_labs}"
+        f"Rows: {len(results)}"
     )
 
-    # ------------------------------------------------------------
-    # Final validation assertion
-    # ------------------------------------------------------------
+    print(
+        f"Duplicate lab_result_id: {duplicate_ids}"
+    )
+
+    print(
+        f"Missing/invalid research_id: "
+        f"{missing_patient_ids}"
+    )
+
+    print(
+        f"Invalid test codes: "
+        f"{missing_test_codes}"
+    )
+
+    print(
+        f"Values outside allowed range: "
+        f"{invalid_values}"
+    )
+
+    print(
+        f"Dates before study start: "
+        f"{dates_before_study}"
+    )
+
+    print(
+        f"Dates after study end: "
+        f"{dates_after_study}"
+    )
+
+    print(
+        f"Result date before patient birth: "
+        f"{dates_before_birth}"
+    )
+
+    print(
+        f"Invalid encounter links: "
+        f"{invalid_encounter_links}"
+    )
+
+    print(
+        f"Encounter date mismatches: "
+        f"{encounter_date_mismatches}"
+    )
+
+    print(
+        f"Patients represented: "
+        f"{patient_coverage}"
+    )
 
     assert duplicate_ids == 0
     assert missing_patient_ids == 0
@@ -528,18 +605,15 @@ def validate_results(results, patients, encounters):
     assert invalid_values == 0
     assert dates_before_study == 0
     assert dates_after_study == 0
+    assert dates_before_birth == 0
     assert invalid_encounter_links == 0
     assert encounter_date_mismatches == 0
 
+    print()
     print("Validation passed.")
 
 
 def write_results(results):
-    OUTPUT_DIR.mkdir(
-        parents=True,
-        exist_ok=True,
-    )
-
     fieldnames = [
         "lab_result_id",
         "research_id",
@@ -563,29 +637,39 @@ def write_results(results):
         )
 
         writer.writeheader()
+
         writer.writerows(results)
 
 
 def main():
+    print(
+        "Generating synthetic laboratory results..."
+    )
 
-    print("Generating synthetic laboratory data...")
-    print(f"Random seed: {SEED}")
+    print(
+        f"Random seed: {SEED}"
+    )
 
     patients = load_patients()
-    encounters = load_encounters()
-    diagnosis_by_patient = load_diagnoses()
 
     print(
         f"Patients loaded: {len(patients)}"
     )
 
+    encounters = load_encounters()
+
     print(
         f"Encounters loaded: {len(encounters)}"
     )
 
+    diagnoses = load_diagnoses()
+
     print(
-        f"Patients with diagnoses: "
-        f"{len(diagnosis_by_patient)}"
+        f"Diagnoses loaded: {len(diagnoses)}"
+    )
+
+    diagnosis_by_patient = build_diagnosis_index(
+        diagnoses
     )
 
     results = generate_lab_results(
@@ -600,30 +684,65 @@ def main():
         encounters,
     )
 
-    write_results(results)
-
     print()
-    print("Generation complete.")
-    print(f"Output file: {OUTPUT_FILE}")
-    print(f"Lab results generated: {len(results)}")
+    print("Laboratory distribution")
 
-    print()
-    print("Results by test:")
-
-    test_counts = {}
+    distribution = {}
 
     for row in results:
         test_code = row["test_code"]
 
-        test_counts[test_code] = (
-            test_counts.get(test_code, 0) + 1
+        distribution[test_code] = (
+            distribution.get(
+                test_code,
+                0,
+            )
+            + 1
         )
 
-    for test_code in sorted(test_counts):
+    for test_code in sorted(distribution):
         print(
             f"{test_code}: "
-            f"{test_counts[test_code]}"
+            f"{distribution[test_code]}"
         )
+
+    linked_results = sum(
+        1
+        for row in results
+        if row["encounter_id"] is not None
+    )
+
+    unlinked_results = (
+        len(results)
+        - linked_results
+    )
+
+    print()
+    print(
+        f"Linked laboratory results: "
+        f"{linked_results}"
+    )
+
+    print(
+        f"Unlinked laboratory results: "
+        f"{unlinked_results}"
+    )
+
+    write_results(results)
+
+    print()
+    print(
+        "Generation complete."
+    )
+
+    print(
+        f"Output file: {OUTPUT_FILE}"
+    )
+
+    print(
+        f"Laboratory results generated: "
+        f"{len(results)}"
+    )
 
 
 if __name__ == "__main__":
