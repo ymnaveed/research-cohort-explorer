@@ -63,3 +63,44 @@ CREATE TABLE cohort_membership (
             patient_id
         )
 );
+
+-- ============================================================
+-- Cohort Criteria
+-- ============================================================
+
+CREATE TABLE cohort_criteria (
+    cohort_criterion_id BIGSERIAL PRIMARY KEY,
+
+    cohort_definition_id BIGINT NOT NULL
+        REFERENCES cohort_definitions(cohort_definition_id),
+
+    criterion_order INTEGER NOT NULL,
+
+    criterion_type VARCHAR(20) NOT NULL DEFAULT 'inclusion',
+
+    domain VARCHAR(30) NOT NULL,
+
+    field_name VARCHAR(50) NOT NULL,
+
+    operator VARCHAR(20) NOT NULL,
+
+    value_text TEXT NOT NULL,
+
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT cohort_criterion_order_valid
+        CHECK (
+            criterion_order >= 1
+        ),
+
+    CONSTRAINT cohort_criterion_type_valid
+        CHECK (
+            criterion_type IN ('inclusion', 'exclusion')
+        ),
+
+    CONSTRAINT cohort_criterion_order_unique
+        UNIQUE (
+            cohort_definition_id,
+            criterion_order
+        )
+);
