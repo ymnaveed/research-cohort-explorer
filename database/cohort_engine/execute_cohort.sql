@@ -127,11 +127,13 @@ diagnosis_group AS (
 )
 SELECT
     format(
-        'BEGIN; DELETE FROM cohort_membership WHERE cohort_definition_id = %s; INSERT INTO cohort_membership (cohort_definition_id, patient_id) SELECT %s, p.patient_id FROM vw_patient_demographics p WHERE %s AND EXISTS (SELECT 1 FROM vw_diagnoses d WHERE d.patient_id = p.patient_id AND %s); SELECT COUNT(*) AS materialized_members FROM cohort_membership WHERE cohort_definition_id = %s; COMMIT;',
+        'BEGIN; INSERT INTO cohort_execution_log (cohort_definition_id, cohort_version, status) SELECT cd.cohort_definition_id, cd.version, ''running'' FROM cohort_definitions cd WHERE cd.cohort_definition_id = %s; DELETE FROM cohort_membership WHERE cohort_definition_id = %s; INSERT INTO cohort_membership (cohort_definition_id, patient_id) SELECT %s, p.patient_id FROM vw_patient_demographics p WHERE %s AND EXISTS (SELECT 1 FROM vw_diagnoses d WHERE d.patient_id = p.patient_id AND %s); UPDATE cohort_execution_log SET completed_at = CURRENT_TIMESTAMP, status = ''succeeded'', member_count = (SELECT COUNT(*) FROM cohort_membership WHERE cohort_definition_id = %s) WHERE execution_id = currval(''cohort_execution_log_execution_id_seq''); SELECT COUNT(*) AS materialized_members FROM cohort_membership WHERE cohort_definition_id = %s; COMMIT;',
+        :'cohort_id',
         :'cohort_id',
         :'cohort_id',
         demographics_group.predicates,
         diagnosis_group.predicates,
+        :'cohort_id',
         :'cohort_id'
     ) AS execution_sql
 FROM demographics_group
@@ -141,3 +143,7 @@ WHERE v.total_criteria > 0
   AND v.total_criteria = v.valid_criteria
   AND demographics_group.predicates IS NOT NULL
   AND diagnosis_group.predicates IS NOT NULL;
+
+
+
+
