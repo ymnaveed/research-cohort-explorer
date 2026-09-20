@@ -17,6 +17,15 @@ services:
       - ./database/schema/002_reference_tables.sql:/docker-entrypoint-initdb.d/02-reference-tables.sql
       - ./database/schema/003_core_tables.sql:/docker-entrypoint-initdb.d/03-core-tables.sql
       - ./database/seed/reference_data.sql:/docker-entrypoint-initdb.d/04-reference-data.sql
+      - ./database/schema/004_cohort_tables.sql:/docker-entrypoint-initdb.d/05-cohort-tables.sql
+      - ./database/schema/005_criterion_whitelist.sql:/docker-entrypoint-initdb.d/06-criterion-whitelist.sql
+      - ./database/views/vw_patient_demographics.sql:/docker-entrypoint-initdb.d/07-view-patient-demographics.sql
+      - ./database/views/vw_encounters.sql:/docker-entrypoint-initdb.d/08-view-encounters.sql
+      - ./database/views/vw_diagnoses.sql:/docker-entrypoint-initdb.d/09-view-diagnoses.sql
+      - ./database/views/vw_lab_results.sql:/docker-entrypoint-initdb.d/10-view-lab-results.sql
+      - ./database/views/vw_medication_orders.sql:/docker-entrypoint-initdb.d/11-view-medication-orders.sql
+      - ./database/views/vw_procedures.sql:/docker-entrypoint-initdb.d/12-view-procedures.sql
+      - ./database/views/vw_clinical_notes.sql:/docker-entrypoint-initdb.d/13-view-clinical-notes.sql
 
 volumes:
   postgres_data:
