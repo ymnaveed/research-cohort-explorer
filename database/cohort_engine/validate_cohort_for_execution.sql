@@ -12,7 +12,9 @@ WITH criterion_validation AS (
         w.source_view,
         CASE
             WHEN w.criterion_whitelist_id IS NULL THEN FALSE
-            WHEN cc.criterion_type <> 'inclusion' THEN FALSE
+            WHEN cc.criterion_type NOT IN ('inclusion', 'exclusion') THEN FALSE
+            WHEN cc.criterion_type = 'exclusion'
+                AND w.source_view <> 'vw_diagnoses' THEN FALSE
             WHEN w.source_view NOT IN (
                 'vw_patient_demographics',
                 'vw_diagnoses'

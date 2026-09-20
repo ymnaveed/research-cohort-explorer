@@ -3,13 +3,17 @@
 -- Cohort Engine: Generate Complete Cohort SQL
 -- ============================================================
 -- Current supported semantics:
---   1. Inclusion criteria only
---   2. All criteria combined with AND
---   3. Demographics evaluated on the patient anchor row
---   4. Diagnosis criteria evaluated on the same diagnosis row
+--   1. Inclusion criteria support demographics and diagnoses
+--   2. Inclusion criteria are combined with AND
+--   3. Demographic inclusions are evaluated on the patient anchor row
+--   4. Diagnosis inclusions are evaluated on the same diagnosis row
 --      inside a correlated EXISTS subquery
---   5. SQL is generated only when every stored criterion is
---      supported by the criterion whitelist
+--   5. Diagnosis exclusions are supported
+--   6. Each diagnosis exclusion is evaluated independently through
+--      its own correlated NOT EXISTS subquery
+--   7. Demographic exclusions are not currently supported
+--   8. SQL is generated only when every stored criterion is
+--      supported and has a valid typed value
 --
 -- This script generates SQL text only. It does not execute it.
 -- ============================================================
@@ -20,6 +24,18 @@ WITH validation AS (
         COUNT(w.criterion_whitelist_id) AS supported_criteria,
         COUNT(*) FILTER (
             WHERE w.criterion_whitelist_id IS NOT NULL
+              AND cc.criterion_type IN ('inclusion', 'exclusion')
+              AND (
+                    cc.criterion_type = 'inclusion'
+                    OR (
+                        cc.criterion_type = 'exclusion'
+                        AND w.source_view = 'vw_diagnoses'
+                    )
+                  )
+              AND w.source_view IN (
+                    'vw_patient_demographics',
+                    'vw_diagnoses'
+                  )
               AND CASE
                     WHEN w.value_type = 'text' THEN TRUE
                     WHEN w.value_type = 'integer' THEN
@@ -88,7 +104,6 @@ generated_predicates AS (
        AND w.operator = cc.operator
     CROSS JOIN validation v
     WHERE cc.cohort_definition_id = :'cohort_id'
-      AND cc.criterion_type = 'inclusion'
       AND v.total_criteria = v.supported_criteria
       AND v.total_criteria = v.valid_value_criteria
       AND v.total_criteria > 0
@@ -101,7 +116,8 @@ demographics_group AS (
             ORDER BY criterion_order
         ) AS predicates
     FROM generated_predicates
-    WHERE source_view = 'vw_patient_demographics'
+    WHERE criterion_type = 'inclusion'
+      AND source_view = 'vw_patient_demographics'
 ),
 diagnosis_group AS (
     SELECT
@@ -111,18 +127,35 @@ diagnosis_group AS (
             ORDER BY criterion_order
         ) AS predicates
     FROM generated_predicates
-    WHERE source_view = 'vw_diagnoses'
+    WHERE criterion_type = 'inclusion'
+      AND source_view = 'vw_diagnoses'
+),
+diagnosis_exclusions AS (
+    SELECT
+        string_agg(
+            format(
+                ' AND NOT EXISTS (SELECT 1 FROM vw_diagnoses d WHERE d.patient_id = p.patient_id AND %s)',
+                sql_predicate
+            ),
+            ''
+            ORDER BY criterion_order
+        ) AS predicates
+    FROM generated_predicates
+    WHERE criterion_type = 'exclusion'
+      AND source_view = 'vw_diagnoses'
 )
 SELECT
     format(
-        'SELECT p.patient_id FROM vw_patient_demographics p WHERE %s AND EXISTS (SELECT 1 FROM vw_diagnoses d WHERE d.patient_id = p.patient_id AND %s);',
+        'SELECT p.patient_id FROM vw_patient_demographics p WHERE %s AND EXISTS (SELECT 1 FROM vw_diagnoses d WHERE d.patient_id = p.patient_id AND %s)%s;',
         demographics_group.predicates,
-        diagnosis_group.predicates
+        diagnosis_group.predicates,
+        COALESCE(
+            diagnosis_exclusions.predicates,
+            ''
+        )
     ) AS generated_sql
 FROM demographics_group
 CROSS JOIN diagnosis_group
+CROSS JOIN diagnosis_exclusions
 WHERE demographics_group.predicates IS NOT NULL
   AND diagnosis_group.predicates IS NOT NULL;
-
-
-

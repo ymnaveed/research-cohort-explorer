@@ -3,12 +3,16 @@
 -- Cohort Engine: Execute Cohort
 -- ============================================================
 -- Current supported semantics:
---   1. Inclusion criteria only
---   2. All criteria combined with AND
---   3. Demographics evaluated on the patient anchor row
---   4. Diagnosis criteria evaluated on the same diagnosis row
+--   1. Inclusion criteria support demographics and diagnoses
+--   2. Inclusion criteria are combined with AND
+--   3. Demographic inclusions are evaluated on the patient anchor row
+--   4. Diagnosis inclusions are evaluated on the same diagnosis row
 --      inside a correlated EXISTS subquery
---   5. Only whitelist-supported criteria with valid typed values
+--   5. Diagnosis exclusions are supported
+--   6. Each diagnosis exclusion is evaluated independently through
+--      its own correlated NOT EXISTS subquery
+--   7. Demographic exclusions are not currently supported
+--   8. Only whitelist-supported criteria with valid typed values
 --      are executable
 --
 -- This script generates a controlled execution statement.
@@ -28,7 +32,9 @@ WITH criterion_validation AS (
         w.value_type,
         CASE
             WHEN w.criterion_whitelist_id IS NULL THEN FALSE
-            WHEN cc.criterion_type <> 'inclusion' THEN FALSE
+            WHEN cc.criterion_type NOT IN ('inclusion', 'exclusion') THEN FALSE
+            WHEN cc.criterion_type = 'exclusion'
+             AND w.source_view <> 'vw_diagnoses' THEN FALSE
             WHEN w.source_view NOT IN (
                 'vw_patient_demographics',
                 'vw_diagnoses'
@@ -61,6 +67,7 @@ validated AS (
 generated_predicates AS (
     SELECT
         cv.criterion_order,
+        cv.criterion_type,
         cv.source_view,
         CASE
             WHEN cv.value_type = 'text' THEN
@@ -113,7 +120,8 @@ demographics_group AS (
             ORDER BY criterion_order
         ) AS predicates
     FROM generated_predicates
-    WHERE source_view = 'vw_patient_demographics'
+    WHERE criterion_type = 'inclusion'
+      AND source_view = 'vw_patient_demographics'
 ),
 diagnosis_group AS (
     SELECT
@@ -123,27 +131,43 @@ diagnosis_group AS (
             ORDER BY criterion_order
         ) AS predicates
     FROM generated_predicates
-    WHERE source_view = 'vw_diagnoses'
+    WHERE criterion_type = 'inclusion'
+      AND source_view = 'vw_diagnoses'
+),
+diagnosis_exclusions AS (
+    SELECT
+        string_agg(
+            format(
+                ' AND NOT EXISTS (SELECT 1 FROM vw_diagnoses d WHERE d.patient_id = p.patient_id AND %s)',
+                sql_predicate
+            ),
+            ''
+            ORDER BY criterion_order
+        ) AS predicates
+    FROM generated_predicates
+    WHERE criterion_type = 'exclusion'
+      AND source_view = 'vw_diagnoses'
 )
 SELECT
     format(
-        'BEGIN; INSERT INTO cohort_execution_log (cohort_definition_id, cohort_version, status) SELECT cd.cohort_definition_id, cd.version, ''running'' FROM cohort_definitions cd WHERE cd.cohort_definition_id = %s; DELETE FROM cohort_membership WHERE cohort_definition_id = %s; INSERT INTO cohort_membership (cohort_definition_id, patient_id) SELECT %s, p.patient_id FROM vw_patient_demographics p WHERE %s AND EXISTS (SELECT 1 FROM vw_diagnoses d WHERE d.patient_id = p.patient_id AND %s); UPDATE cohort_execution_log SET completed_at = CURRENT_TIMESTAMP, status = ''succeeded'', member_count = (SELECT COUNT(*) FROM cohort_membership WHERE cohort_definition_id = %s) WHERE execution_id = currval(''cohort_execution_log_execution_id_seq''); SELECT COUNT(*) AS materialized_members FROM cohort_membership WHERE cohort_definition_id = %s; COMMIT;',
+        'BEGIN; INSERT INTO cohort_execution_log (cohort_definition_id, cohort_version, status) SELECT cd.cohort_definition_id, cd.version, ''running'' FROM cohort_definitions cd WHERE cd.cohort_definition_id = %s; DELETE FROM cohort_membership WHERE cohort_definition_id = %s; INSERT INTO cohort_membership (cohort_definition_id, patient_id) SELECT %s, p.patient_id FROM vw_patient_demographics p WHERE %s AND EXISTS (SELECT 1 FROM vw_diagnoses d WHERE d.patient_id = p.patient_id AND %s)%s; UPDATE cohort_execution_log SET completed_at = CURRENT_TIMESTAMP, status = ''succeeded'', member_count = (SELECT COUNT(*) FROM cohort_membership WHERE cohort_definition_id = %s) WHERE execution_id = currval(''cohort_execution_log_execution_id_seq''); SELECT COUNT(*) AS materialized_members FROM cohort_membership WHERE cohort_definition_id = %s; COMMIT;',
         :'cohort_id',
         :'cohort_id',
         :'cohort_id',
         demographics_group.predicates,
         diagnosis_group.predicates,
+        COALESCE(
+            diagnosis_exclusions.predicates,
+            ''
+        ),
         :'cohort_id',
         :'cohort_id'
     ) AS execution_sql
 FROM demographics_group
 CROSS JOIN diagnosis_group
+CROSS JOIN diagnosis_exclusions
 CROSS JOIN validated v
 WHERE v.total_criteria > 0
   AND v.total_criteria = v.valid_criteria
   AND demographics_group.predicates IS NOT NULL
   AND diagnosis_group.predicates IS NOT NULL;
-
-
-
-
