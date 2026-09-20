@@ -17,7 +17,20 @@
 WITH validation AS (
     SELECT
         COUNT(*) AS total_criteria,
-        COUNT(w.criterion_whitelist_id) AS supported_criteria
+        COUNT(w.criterion_whitelist_id) AS supported_criteria,
+        COUNT(*) FILTER (
+            WHERE w.criterion_whitelist_id IS NOT NULL
+              AND CASE
+                    WHEN w.value_type = 'text' THEN TRUE
+                    WHEN w.value_type = 'integer' THEN
+                        pg_input_is_valid(cc.value_text, 'integer')
+                    WHEN w.value_type = 'numeric' THEN
+                        pg_input_is_valid(cc.value_text, 'numeric')
+                    WHEN w.value_type = 'date' THEN
+                        pg_input_is_valid(cc.value_text, 'date')
+                    ELSE FALSE
+                  END
+        ) AS valid_value_criteria
     FROM cohort_criteria cc
     LEFT JOIN cohort_criterion_whitelist w
         ON w.domain = cc.domain
@@ -77,6 +90,7 @@ generated_predicates AS (
     WHERE cc.cohort_definition_id = :'cohort_id'
       AND cc.criterion_type = 'inclusion'
       AND v.total_criteria = v.supported_criteria
+      AND v.total_criteria = v.valid_value_criteria
       AND v.total_criteria > 0
 ),
 demographics_group AS (
@@ -109,3 +123,6 @@ FROM demographics_group
 CROSS JOIN diagnosis_group
 WHERE demographics_group.predicates IS NOT NULL
   AND diagnosis_group.predicates IS NOT NULL;
+
+
+
