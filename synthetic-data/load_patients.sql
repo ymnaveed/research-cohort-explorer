@@ -11,6 +11,8 @@ BEGIN;
     research_id,
     date_of_birth,
     sex,
+    race,
+    ethnicity,
     zip3
 )
 FROM 'synthetic-data/output/patients.csv'
