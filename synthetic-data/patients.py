@@ -13,6 +13,8 @@ from config import (
     PATIENT_COUNT,
     SEED,
     SEX_DISTRIBUTION,
+    RACE_DISTRIBUTION,
+    ETHNICITY_DISTRIBUTION,
     ZIP3_VALUES,
     STUDY_END_DATE,
 )
@@ -74,7 +76,7 @@ def generate_date_of_birth(age_group):
     return earliest_birth_date + timedelta(
         days=random.randint(0, days_between)
     )
-    
+
 def choose_sex():
     sexes = list(SEX_DISTRIBUTION.keys())
     weights = list(SEX_DISTRIBUTION.values())
@@ -84,7 +86,26 @@ def choose_sex():
         weights=weights,
         k=1,
     )[0]
+def choose_race():
+    races = list(RACE_DISTRIBUTION.keys())
+    weights = list(RACE_DISTRIBUTION.values())
 
+    return random.choices(
+        races,
+        weights=weights,
+        k=1,
+    )[0]
+
+
+def choose_ethnicity():
+    ethnicities = list(ETHNICITY_DISTRIBUTION.keys())
+    weights = list(ETHNICITY_DISTRIBUTION.values())
+
+    return random.choices(
+        ethnicities,
+        weights=weights,
+        k=1,
+    )[0]
 
 def choose_zip3():
     return random.choice(ZIP3_VALUES)
@@ -103,11 +124,12 @@ def generate_patient(patient_number):
         "research_id": f"P-{patient_number:06d}",
         "date_of_birth": date_of_birth.isoformat(),
         "sex": choose_sex(),
+        "race": choose_race(),
+        "ethnicity": choose_ethnicity(),
         "zip3": choose_zip3(),
     }
 
     return patient
-
 
 # ------------------------------------------------------------
 # CSV output
@@ -120,20 +142,13 @@ def write_patients(patients):
         "research_id",
         "date_of_birth",
         "sex",
+        "race",
+        "ethnicity",
         "zip3",
     ]
 
-    with OUTPUT_FILE.open(
-        "w",
-        newline="",
-        encoding="utf-8",
-    ) as csv_file:
-
-        writer = csv.DictWriter(
-            csv_file,
-            fieldnames=fieldnames,
-        )
-
+    with OUTPUT_FILE.open("w", newline="", encoding="utf-8") as f:
+        writer = csv.DictWriter(f, fieldnames=fieldnames)
         writer.writeheader()
         writer.writerows(patients)
 

@@ -27,7 +27,19 @@ SEX_DISTRIBUTION = {
     "M": 0.48,
     "O": 0.01,
 }
+RACE_DISTRIBUTION = {
+    "White": 0.60,
+    "Black": 0.15,
+    "Asian": 0.10,
+    "Other": 0.10,
+    "Unknown": 0.05,
+}
 
+ETHNICITY_DISTRIBUTION = {
+    "Hispanic or Latino": 0.20,
+    "Not Hispanic or Latino": 0.75,
+    "Unknown": 0.05,
+}
 
 # ------------------------------------------------------------
 # Geographic distribution
