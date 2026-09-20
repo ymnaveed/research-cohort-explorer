@@ -146,10 +146,26 @@ diagnosis_exclusions AS (
 )
 SELECT
     format(
-        'SELECT p.patient_id FROM vw_patient_demographics p WHERE %s AND EXISTS (SELECT 1 FROM vw_diagnoses d WHERE d.patient_id = p.patient_id AND %s)%s;',
-        demographics_group.predicates,
-        diagnosis_group.predicates,
-        COALESCE(
+        'SELECT p.patient_id FROM vw_patient_demographics p WHERE %s%s;',
+        CASE
+            WHEN demographics_group.predicates IS NOT NULL
+                THEN demographics_group.predicates
+            WHEN diagnosis_group.predicates IS NOT NULL
+                THEN format(
+                    'EXISTS (SELECT 1 FROM vw_diagnoses d WHERE d.patient_id = p.patient_id AND %s)',
+                    diagnosis_group.predicates
+                )
+        END,
+        CASE
+            WHEN demographics_group.predicates IS NOT NULL
+             AND diagnosis_group.predicates IS NOT NULL
+                THEN format(
+                    ' AND EXISTS (SELECT 1 FROM vw_diagnoses d WHERE d.patient_id = p.patient_id AND %s)',
+                    diagnosis_group.predicates
+                )
+            ELSE ''
+        END
+        || COALESCE(
             diagnosis_exclusions.predicates,
             ''
         )
@@ -158,4 +174,4 @@ FROM demographics_group
 CROSS JOIN diagnosis_group
 CROSS JOIN diagnosis_exclusions
 WHERE demographics_group.predicates IS NOT NULL
-  AND diagnosis_group.predicates IS NOT NULL;
+   OR diagnosis_group.predicates IS NOT NULL;

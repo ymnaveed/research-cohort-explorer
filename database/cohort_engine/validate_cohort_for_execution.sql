@@ -46,9 +46,12 @@ SELECT
     ) AS invalid_criteria,
     CASE
         WHEN COUNT(*) > 0
-         AND COUNT(*) FILTER (WHERE criterion_is_valid) = COUNT(*)
-            THEN 'ready'
-        ELSE 'blocked'
-    END AS execution_status
+            AND COUNT(*) FILTER (WHERE criterion_is_valid) = COUNT(*)
+            AND COUNT(*) FILTER (
+                WHERE criterion_type = 'inclusion'
+            ) > 0
+        THEN 'ready'
+    ELSE 'blocked'
+END AS execution_status
 FROM criterion_validation
 GROUP BY cohort_definition_id;
