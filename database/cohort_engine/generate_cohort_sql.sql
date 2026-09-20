@@ -3,16 +3,22 @@
 -- Cohort Engine: Generate Complete Cohort SQL
 -- ============================================================
 -- Current supported semantics:
---   1. Inclusion criteria support demographics and diagnoses
+--   1. Inclusion criteria support demographics, diagnoses,
+--      and laboratory results
 --   2. Inclusion criteria are combined with AND
---   3. Demographic inclusions are evaluated on the patient anchor row
---   4. Diagnosis inclusions are evaluated on the same diagnosis row
---      inside a correlated EXISTS subquery
---   5. Diagnosis exclusions are supported
---   6. Each diagnosis exclusion is evaluated independently through
+--   3. Demographic inclusions are evaluated on the patient
+--      anchor row
+--   4. Diagnosis inclusions are evaluated on the same diagnosis
+--      row inside a correlated EXISTS subquery
+--   5. Laboratory inclusions are evaluated on the same laboratory
+--      result row inside a correlated EXISTS subquery
+--   6. Diagnosis exclusions are supported
+--   7. Each diagnosis exclusion is evaluated independently through
 --      its own correlated NOT EXISTS subquery
---   7. Demographic exclusions are not currently supported
---   8. SQL is generated only when every stored criterion is
+--   8. Demographic and laboratory exclusions are not currently
+--      supported
+--   9. At least one supported inclusion criterion is required
+--  10. SQL is generated only when every stored criterion is
 --      supported and has a valid typed value
 --
 -- This script generates SQL text only. It does not execute it.
@@ -34,19 +40,32 @@ WITH validation AS (
                   )
               AND w.source_view IN (
                     'vw_patient_demographics',
-                    'vw_diagnoses'
+                    'vw_diagnoses',
+                    'vw_lab_results'
                   )
               AND CASE
                     WHEN w.value_type = 'text' THEN TRUE
                     WHEN w.value_type = 'integer' THEN
-                        pg_input_is_valid(cc.value_text, 'integer')
+                        pg_input_is_valid(
+                            cc.value_text,
+                            'integer'
+                        )
                     WHEN w.value_type = 'numeric' THEN
-                        pg_input_is_valid(cc.value_text, 'numeric')
+                        pg_input_is_valid(
+                            cc.value_text,
+                            'numeric'
+                        )
                     WHEN w.value_type = 'date' THEN
-                        pg_input_is_valid(cc.value_text, 'date')
+                        pg_input_is_valid(
+                            cc.value_text,
+                            'date'
+                        )
                     ELSE FALSE
                   END
-        ) AS valid_value_criteria
+        ) AS valid_value_criteria,
+        COUNT(*) FILTER (
+            WHERE cc.criterion_type = 'inclusion'
+        ) AS inclusion_criteria
     FROM cohort_criteria cc
     LEFT JOIN cohort_criterion_whitelist w
         ON w.domain = cc.domain
@@ -54,6 +73,7 @@ WITH validation AS (
        AND w.operator = cc.operator
     WHERE cc.cohort_definition_id = :'cohort_id'
 ),
+
 generated_predicates AS (
     SELECT
         cc.criterion_order,
@@ -107,7 +127,9 @@ generated_predicates AS (
       AND v.total_criteria = v.supported_criteria
       AND v.total_criteria = v.valid_value_criteria
       AND v.total_criteria > 0
+      AND v.inclusion_criteria > 0
 ),
+
 demographics_group AS (
     SELECT
         string_agg(
@@ -119,6 +141,7 @@ demographics_group AS (
     WHERE criterion_type = 'inclusion'
       AND source_view = 'vw_patient_demographics'
 ),
+
 diagnosis_group AS (
     SELECT
         string_agg(
@@ -130,6 +153,19 @@ diagnosis_group AS (
     WHERE criterion_type = 'inclusion'
       AND source_view = 'vw_diagnoses'
 ),
+
+laboratory_group AS (
+    SELECT
+        string_agg(
+            sql_predicate,
+            ' AND '
+            ORDER BY criterion_order
+        ) AS predicates
+    FROM generated_predicates
+    WHERE criterion_type = 'inclusion'
+      AND source_view = 'vw_lab_results'
+),
+
 diagnosis_exclusions AS (
     SELECT
         string_agg(
@@ -143,35 +179,47 @@ diagnosis_exclusions AS (
     FROM generated_predicates
     WHERE criterion_type = 'exclusion'
       AND source_view = 'vw_diagnoses'
+),
+
+inclusion_clause AS (
+    SELECT
+        concat_ws(
+            ' AND ',
+            demographics_group.predicates,
+            CASE
+                WHEN diagnosis_group.predicates IS NOT NULL
+                    THEN format(
+                        'EXISTS (SELECT 1 FROM vw_diagnoses d WHERE d.patient_id = p.patient_id AND %s)',
+                        diagnosis_group.predicates
+                    )
+            END,
+            CASE
+                WHEN laboratory_group.predicates IS NOT NULL
+                    THEN format(
+                        'EXISTS (SELECT 1 FROM vw_lab_results l WHERE l.patient_id = p.patient_id AND %s)',
+                        laboratory_group.predicates
+                    )
+            END
+        ) AS predicates
+    FROM demographics_group
+    CROSS JOIN diagnosis_group
+    CROSS JOIN laboratory_group
 )
+
 SELECT
     format(
         'SELECT p.patient_id FROM vw_patient_demographics p WHERE %s%s;',
-        CASE
-            WHEN demographics_group.predicates IS NOT NULL
-                THEN demographics_group.predicates
-            WHEN diagnosis_group.predicates IS NOT NULL
-                THEN format(
-                    'EXISTS (SELECT 1 FROM vw_diagnoses d WHERE d.patient_id = p.patient_id AND %s)',
-                    diagnosis_group.predicates
-                )
-        END,
-        CASE
-            WHEN demographics_group.predicates IS NOT NULL
-             AND diagnosis_group.predicates IS NOT NULL
-                THEN format(
-                    ' AND EXISTS (SELECT 1 FROM vw_diagnoses d WHERE d.patient_id = p.patient_id AND %s)',
-                    diagnosis_group.predicates
-                )
-            ELSE ''
-        END
-        || COALESCE(
+        inclusion_clause.predicates,
+        COALESCE(
             diagnosis_exclusions.predicates,
             ''
         )
     ) AS generated_sql
-FROM demographics_group
-CROSS JOIN diagnosis_group
+FROM inclusion_clause
 CROSS JOIN diagnosis_exclusions
-WHERE demographics_group.predicates IS NOT NULL
-   OR diagnosis_group.predicates IS NOT NULL;
+CROSS JOIN validation v
+WHERE v.total_criteria > 0
+  AND v.total_criteria = v.supported_criteria
+  AND v.total_criteria = v.valid_value_criteria
+  AND v.inclusion_criteria > 0
+  AND inclusion_clause.predicates <> '';
