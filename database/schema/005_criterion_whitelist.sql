@@ -14,6 +14,8 @@ CREATE TABLE cohort_criterion_whitelist (
 
     source_view VARCHAR(100) NOT NULL,
 
+    source_alias VARCHAR(20) NOT NULL,
+
     source_column VARCHAR(100) NOT NULL,
 
     value_type VARCHAR(20) NOT NULL,
@@ -32,9 +34,9 @@ CREATE TABLE cohort_criterion_whitelist (
 );
 
 INSERT INTO cohort_criterion_whitelist
-(domain, field_name, operator, source_view, source_column, value_type)
+(domain, field_name, operator, source_view, source_alias, source_column, value_type)
 VALUES
-('diagnosis', 'diagnosis_code', '=',  'vw_diagnoses',            'diagnosis_code',   'text'),
-('diagnosis', 'recorded_date',  '>=', 'vw_diagnoses',            'recorded_date',    'date'),
-('diagnosis', 'recorded_date',  '<=', 'vw_diagnoses',            'recorded_date',    'date'),
-('demographics', 'age_at_study_end', '>=', 'vw_patient_demographics', 'age_at_study_end', 'integer');
+('diagnosis', 'diagnosis_code', '=',  'vw_diagnoses',            'd', 'diagnosis_code',   'text'),
+('diagnosis', 'recorded_date',  '>=', 'vw_diagnoses',            'd', 'recorded_date',    'date'),
+('diagnosis', 'recorded_date',  '<=', 'vw_diagnoses',            'd', 'recorded_date',    'date'),
+('demographics', 'age_at_study_end', '>=', 'vw_patient_demographics', 'p', 'age_at_study_end', 'integer');
