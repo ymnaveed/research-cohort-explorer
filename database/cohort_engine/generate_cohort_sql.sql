@@ -8,11 +8,24 @@
 --   3. Demographics evaluated on the patient anchor row
 --   4. Diagnosis criteria evaluated on the same diagnosis row
 --      inside a correlated EXISTS subquery
+--   5. SQL is generated only when every stored criterion is
+--      supported by the criterion whitelist
 --
 -- This script generates SQL text only. It does not execute it.
 -- ============================================================
 
-WITH generated_predicates AS (
+WITH validation AS (
+    SELECT
+        COUNT(*) AS total_criteria,
+        COUNT(w.criterion_whitelist_id) AS supported_criteria
+    FROM cohort_criteria cc
+    LEFT JOIN cohort_criterion_whitelist w
+        ON w.domain = cc.domain
+       AND w.field_name = cc.field_name
+       AND w.operator = cc.operator
+    WHERE cc.cohort_definition_id = :'cohort_id'
+),
+generated_predicates AS (
     SELECT
         cc.criterion_order,
         cc.criterion_type,
@@ -60,8 +73,11 @@ WITH generated_predicates AS (
         ON w.domain = cc.domain
        AND w.field_name = cc.field_name
        AND w.operator = cc.operator
+    CROSS JOIN validation v
     WHERE cc.cohort_definition_id = :'cohort_id'
       AND cc.criterion_type = 'inclusion'
+      AND v.total_criteria = v.supported_criteria
+      AND v.total_criteria > 0
 ),
 demographics_group AS (
     SELECT
@@ -90,4 +106,6 @@ SELECT
         diagnosis_group.predicates
     ) AS generated_sql
 FROM demographics_group
-CROSS JOIN diagnosis_group;
+CROSS JOIN diagnosis_group
+WHERE demographics_group.predicates IS NOT NULL
+  AND diagnosis_group.predicates IS NOT NULL;
