@@ -18,7 +18,8 @@ WITH criterion_validation AS (
             WHEN w.source_view NOT IN (
                 'vw_patient_demographics',
                 'vw_diagnoses',
-                'vw_lab_results'
+                'vw_lab_results',
+                'vw_medication_orders'
             ) THEN FALSE
             WHEN w.value_type = 'text' THEN TRUE
             WHEN w.value_type = 'integer' THEN

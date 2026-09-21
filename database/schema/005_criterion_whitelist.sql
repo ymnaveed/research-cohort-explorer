@@ -42,4 +42,5 @@ VALUES
 ('demographics', 'age_at_study_end', '>=', 'vw_patient_demographics', 'p', 'age_at_study_end', 'integer'),
 ('laboratory', 'test_code',      '=',  'vw_lab_results', 'l', 'test_code',      'text'),
 ('laboratory', 'result_numeric', '>=', 'vw_lab_results', 'l', 'result_numeric', 'numeric'),
-('laboratory', 'result_numeric', '<=', 'vw_lab_results', 'l', 'result_numeric', 'numeric');
+('laboratory', 'result_numeric', '<=', 'vw_lab_results', 'l', 'result_numeric', 'numeric'),
+('medication', 'medication_code', '=', 'vw_medication_orders', 'm', 'medication_code', 'text');
