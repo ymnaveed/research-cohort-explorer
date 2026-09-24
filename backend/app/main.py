@@ -124,3 +124,42 @@ def get_cohort_criteria(cohort_id: int):
             criteria = cursor.fetchall()
 
     return criteria
+
+
+@app.get("/cohorts/{cohort_id}/results")
+def get_cohort_results(cohort_id: int):
+    with get_connection() as connection:
+        with connection.cursor(row_factory=dict_row) as cursor:
+            cursor.execute(
+                """
+                SELECT
+                    cohort_definition_id,
+                    cohort_name
+                FROM cohort_definitions
+                WHERE cohort_definition_id = %s
+                """,
+                (cohort_id,),
+            )
+            cohort = cursor.fetchone()
+
+            if cohort is None:
+                raise HTTPException(
+                    status_code=404,
+                    detail="Cohort not found",
+                )
+
+            cursor.execute(
+                """
+                SELECT COUNT(*) AS member_count
+                FROM cohort_membership
+                WHERE cohort_definition_id = %s
+                """,
+                (cohort_id,),
+            )
+            result = cursor.fetchone()
+
+    return {
+        "cohort_definition_id": cohort["cohort_definition_id"],
+        "cohort_name": cohort["cohort_name"],
+        "member_count": result["member_count"],
+    }
