@@ -83,3 +83,44 @@ def get_cohort(cohort_id: int):
         )
 
     return cohort
+
+
+@app.get("/cohorts/{cohort_id}/criteria")
+def get_cohort_criteria(cohort_id: int):
+    with get_connection() as connection:
+        with connection.cursor(row_factory=dict_row) as cursor:
+            cursor.execute(
+                """
+                SELECT cohort_definition_id
+                FROM cohort_definitions
+                WHERE cohort_definition_id = %s
+                """,
+                (cohort_id,),
+            )
+            cohort = cursor.fetchone()
+
+            if cohort is None:
+                raise HTTPException(
+                    status_code=404,
+                    detail="Cohort not found",
+                )
+
+            cursor.execute(
+                """
+                SELECT
+                    cohort_criterion_id,
+                    criterion_order,
+                    criterion_type,
+                    domain,
+                    field_name,
+                    operator,
+                    value_text
+                FROM cohort_criteria
+                WHERE cohort_definition_id = %s
+                ORDER BY criterion_order
+                """,
+                (cohort_id,),
+            )
+            criteria = cursor.fetchall()
+
+    return criteria
