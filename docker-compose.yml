@@ -27,7 +27,7 @@ services:
       - ./database/views/vw_medication_orders.sql:/docker-entrypoint-initdb.d/12-view-medication-orders.sql
       - ./database/views/vw_procedures.sql:/docker-entrypoint-initdb.d/13-view-procedures.sql
       - ./database/views/vw_clinical_notes.sql:/docker-entrypoint-initdb.d/14-view-clinical-notes.sql
-
+      - ./database/schema/007_cohort_execution_function.sql:/docker-entrypoint-initdb.d/15-cohort-execution-function.sql
 volumes:
   postgres_data:
 
