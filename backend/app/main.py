@@ -163,3 +163,41 @@ def get_cohort_results(cohort_id: int):
         "cohort_name": cohort["cohort_name"],
         "member_count": result["member_count"],
     }
+
+
+@app.post("/cohorts/{cohort_id}/execute")
+def execute_cohort_endpoint(cohort_id: int):
+    with get_connection() as connection:
+        with connection.cursor(row_factory=dict_row) as cursor:
+            cursor.execute(
+                """
+                SELECT
+                    cohort_definition_id,
+                    cohort_name
+                FROM cohort_definitions
+                WHERE cohort_definition_id = %s
+                """,
+                (cohort_id,),
+            )
+            cohort = cursor.fetchone()
+
+            if cohort is None:
+                raise HTTPException(
+                    status_code=404,
+                    detail="Cohort not found",
+                )
+
+            cursor.execute(
+                """
+                SELECT execute_cohort(%s) AS member_count
+                """,
+                (cohort_id,),
+            )
+            result = cursor.fetchone()
+
+    return {
+        "status": "succeeded",
+        "cohort_definition_id": cohort["cohort_definition_id"],
+        "cohort_name": cohort["cohort_name"],
+        "member_count": result["member_count"],
+    }
