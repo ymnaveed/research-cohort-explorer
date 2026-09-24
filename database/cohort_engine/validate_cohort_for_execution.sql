@@ -20,7 +20,8 @@ WITH criterion_validation AS (
                 'vw_diagnoses',
                 'vw_lab_results',
                 'vw_medication_orders',
-                'vw_procedures'
+                'vw_procedures',
+                'vw_encounters'
             ) THEN FALSE
             WHEN w.value_type = 'text' THEN TRUE
             WHEN w.value_type = 'integer' THEN

@@ -44,4 +44,5 @@ VALUES
 ('laboratory', 'result_numeric', '>=', 'vw_lab_results', 'l', 'result_numeric', 'numeric'),
 ('laboratory', 'result_numeric', '<=', 'vw_lab_results', 'l', 'result_numeric', 'numeric'),
 ('medication', 'medication_code', '=', 'vw_medication_orders', 'm', 'medication_code', 'text'),
-('procedure', 'procedure_code', '=', 'vw_procedures', 'pr', 'procedure_code', 'text');
+('procedure', 'procedure_code', '=', 'vw_procedures', 'pr', 'procedure_code', 'text'),
+('encounter', 'encounter_type_code', '=', 'vw_encounters', 'e', 'encounter_type_code', 'text');

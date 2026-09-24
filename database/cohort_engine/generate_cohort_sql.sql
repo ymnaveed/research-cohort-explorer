@@ -4,7 +4,7 @@
 -- ============================================================
 -- Current supported semantics:
 --   1. Inclusion criteria support demographics, diagnoses,
---      laboratory results, medication orders, and procedures
+--      laboratory results, medication orders, procedures, and encounters
 --   2. Inclusion criteria are combined with AND
 --   3. Demographic inclusions are evaluated on the patient
 --      anchor row
@@ -16,13 +16,15 @@
 --      order row inside a correlated EXISTS subquery
 --   7. Procedure inclusions are evaluated on the same procedure
 --      row inside a correlated EXISTS subquery
---   8. Diagnosis exclusions are supported
---   9. Each diagnosis exclusion is evaluated independently through
+--   8. Encounter inclusions are evaluated on the same encounter
+--      row inside a correlated EXISTS subquery
+--   9. Diagnosis exclusions are supported
+--  10. Each diagnosis exclusion is evaluated independently through
 --      its own correlated NOT EXISTS subquery
---  10. Demographic, laboratory, medication, and procedure
+--  11. Demographic, laboratory, medication, procedure, and encounter
 --      exclusions are not currently supported
---  11. At least one supported inclusion criterion is required
---  12. SQL is generated only when every stored criterion is
+--  12. At least one supported inclusion criterion is required
+--  13. SQL is generated only when every stored criterion is
 --      supported and has a valid typed value
 --
 -- This script generates SQL text only. It does not execute it.
@@ -47,7 +49,8 @@ WITH validation AS (
                     'vw_diagnoses',
                     'vw_lab_results',
                     'vw_medication_orders',
-                    'vw_procedures'
+                    'vw_procedures',
+                    'vw_encounters'
                   )
               AND CASE
                     WHEN w.value_type = 'text' THEN TRUE
@@ -196,6 +199,18 @@ procedure_group AS (
       AND source_view = 'vw_procedures'
 ),
 
+encounter_group AS (
+    SELECT
+        string_agg(
+            sql_predicate,
+            ' AND '
+            ORDER BY criterion_order
+        ) AS predicates
+    FROM generated_predicates
+    WHERE criterion_type = 'inclusion'
+      AND source_view = 'vw_encounters'
+),
+
 diagnosis_exclusions AS (
     SELECT
         string_agg(
@@ -243,6 +258,13 @@ inclusion_clause AS (
                         'EXISTS (SELECT 1 FROM vw_procedures pr WHERE pr.patient_id = p.patient_id AND %s)',
                         procedure_group.predicates
                     )
+            END,
+            CASE
+                WHEN encounter_group.predicates IS NOT NULL
+                    THEN format(
+                        'EXISTS (SELECT 1 FROM vw_encounters e WHERE e.patient_id = p.patient_id AND %s)',
+                        encounter_group.predicates
+                    )
             END
         ) AS predicates
     FROM demographics_group
@@ -250,6 +272,7 @@ inclusion_clause AS (
     CROSS JOIN laboratory_group
     CROSS JOIN medication_group
     CROSS JOIN procedure_group
+    CROSS JOIN encounter_group
 )
 
 SELECT
