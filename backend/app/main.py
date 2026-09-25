@@ -1,8 +1,16 @@
+from datetime import date
+
 from fastapi import FastAPI, HTTPException
+from pydantic import BaseModel
 from psycopg.rows import dict_row
 
 from backend.app.database import get_connection
 
+class CohortCreate(BaseModel):
+    cohort_name: str
+    description: str | None = None
+    study_start_date: date
+    study_end_date: date
 
 app = FastAPI(
     title="Research Cohort Explorer API",
@@ -201,3 +209,41 @@ def execute_cohort_endpoint(cohort_id: int):
         "cohort_name": cohort["cohort_name"],
         "member_count": result["member_count"],
     }
+@app.post("/cohorts", status_code=201)
+def create_cohort(cohort: CohortCreate):
+    if cohort.study_end_date < cohort.study_start_date:
+        raise HTTPException(
+            status_code=400,
+            detail="Study end date cannot be before study start date",
+        )
+
+    with get_connection() as connection:
+        with connection.cursor(row_factory=dict_row) as cursor:
+            cursor.execute(
+                """
+                INSERT INTO cohort_definitions (
+                    cohort_name,
+                    description,
+                    study_start_date,
+                    study_end_date
+                )
+                VALUES (%s, %s, %s, %s)
+                RETURNING
+                    cohort_definition_id,
+                    cohort_name,
+                    description,
+                    study_start_date,
+                    study_end_date,
+                    version,
+                    status
+                """,
+                (
+                    cohort.cohort_name,
+                    cohort.description,
+                    cohort.study_start_date,
+                    cohort.study_end_date,
+                ),
+            )
+            created_cohort = cursor.fetchone()
+
+    return created_cohort

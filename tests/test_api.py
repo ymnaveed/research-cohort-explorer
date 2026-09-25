@@ -2,6 +2,8 @@ from fastapi.testclient import TestClient
 
 from backend.app.main import app
 
+from backend.app.database import get_connection
+
 
 client = TestClient(app)
 
@@ -96,4 +98,51 @@ def test_execute_cohort_not_found():
     assert response.status_code == 404
     assert response.json() == {
         "detail": "Cohort not found",
-    }    
+    }
+def test_create_cohort_rejects_invalid_dates():
+    response = client.post(
+        "/cohorts",
+        json={
+            "cohort_name": "Invalid Date Cohort",
+            "study_start_date": "2025-12-31",
+            "study_end_date": "2020-01-01",
+        },
+    )
+
+    assert response.status_code == 400
+    assert response.json() == {
+        "detail": "Study end date cannot be before study start date",
+    }
+def test_create_cohort():
+    response = client.post(
+        "/cohorts",
+        json={
+            "cohort_name": "Automated API Test Cohort",
+            "description": "Temporary cohort created by the API test suite",
+            "study_start_date": "2020-01-01",
+            "study_end_date": "2025-12-31",
+        },
+    )
+
+    assert response.status_code == 201
+
+    data = response.json()
+    cohort_id = data["cohort_definition_id"]
+
+    try:
+        assert data["cohort_name"] == "Automated API Test Cohort"
+        assert data["description"] == "Temporary cohort created by the API test suite"
+        assert data["study_start_date"] == "2020-01-01"
+        assert data["study_end_date"] == "2025-12-31"
+        assert data["version"] == 1
+        assert data["status"] == "draft"
+    finally:
+        with get_connection() as connection:
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    """
+                    DELETE FROM cohort_definitions
+                    WHERE cohort_definition_id = %s
+                    """,
+                    (cohort_id,),
+                )    
