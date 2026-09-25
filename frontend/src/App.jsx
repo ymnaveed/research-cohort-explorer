@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import "./App.css";
 
 const API_BASE_URL = "http://127.0.0.1:8000";
 
@@ -6,6 +7,11 @@ function App() {
   const [cohorts, setCohorts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+
+  const [selectedCohort, setSelectedCohort] = useState(null);
+  const [criteria, setCriteria] = useState([]);
+  const [criteriaLoading, setCriteriaLoading] = useState(false);
+  const [criteriaError, setCriteriaError] = useState("");
 
   useEffect(() => {
     async function loadCohorts() {
@@ -27,6 +33,30 @@ function App() {
 
     loadCohorts();
   }, []);
+
+  async function openCohort(cohort) {
+    setSelectedCohort(cohort);
+    setCriteria([]);
+    setCriteriaError("");
+    setCriteriaLoading(true);
+
+    try {
+      const response = await fetch(
+        `${API_BASE_URL}/cohorts/${cohort.cohort_definition_id}/criteria`,
+      );
+
+      if (!response.ok) {
+        throw new Error(`API request failed: ${response.status}`);
+      }
+
+      const data = await response.json();
+      setCriteria(data);
+    } catch (err) {
+      setCriteriaError(err.message);
+    } finally {
+      setCriteriaLoading(false);
+    }
+  }
 
   return (
     <div className="app">
@@ -67,9 +97,7 @@ function App() {
           <div className="state-card error-card">
             <h3>Unable to load cohorts</h3>
             <p>{error}</p>
-            <p>
-              Make sure the FastAPI backend is running on port 8000.
-            </p>
+            <p>Make sure the FastAPI backend is running on port 8000.</p>
           </div>
         )}
 
@@ -117,11 +145,98 @@ function App() {
 
                 <div className="card-footer">
                   <span>Version {cohort.version}</span>
-                  <button type="button">Open cohort</button>
+
+                  <button
+                    type="button"
+                    onClick={() => openCohort(cohort)}
+                  >
+                    Open cohort
+                  </button>
                 </div>
               </article>
             ))}
           </div>
+        )}
+
+        {selectedCohort && (
+          <section className="criteria-section">
+            <div className="section-header">
+              <div>
+                <p className="section-eyebrow">Selected cohort</p>
+                <h2>{selectedCohort.cohort_name}</h2>
+              </div>
+
+              <span className="cohort-count">
+                {criteria.length} {criteria.length === 1 ? "criterion" : "criteria"}
+              </span>
+            </div>
+
+            {criteriaLoading && (
+              <div className="state-card">
+                <p>Loading criteria...</p>
+              </div>
+            )}
+
+            {criteriaError && (
+              <div className="state-card error-card">
+                <h3>Unable to load criteria</h3>
+                <p>{criteriaError}</p>
+              </div>
+            )}
+
+            {!criteriaLoading &&
+              !criteriaError &&
+              criteria.length === 0 && (
+                <div className="state-card">
+                  <p>No criteria have been defined for this cohort.</p>
+                </div>
+              )}
+
+            {!criteriaLoading &&
+              !criteriaError &&
+              criteria.length > 0 && (
+                <div className="criteria-table-wrapper">
+                  <table className="criteria-table">
+                    <thead>
+                      <tr>
+                        <th>Order</th>
+                        <th>Type</th>
+                        <th>Domain</th>
+                        <th>Field</th>
+                        <th>Operator</th>
+                        <th>Value</th>
+                      </tr>
+                    </thead>
+
+                    <tbody>
+                      {criteria.map((criterion) => (
+                        <tr key={criterion.cohort_criterion_id}>
+                          <td>{criterion.criterion_order}</td>
+
+                          <td>
+                            <span
+                              className={`criterion-type ${criterion.criterion_type}`}
+                            >
+                              {criterion.criterion_type}
+                            </span>
+                          </td>
+
+                          <td>{criterion.domain}</td>
+
+                          <td>{criterion.field_name}</td>
+
+                          <td>
+                            <code>{criterion.operator}</code>
+                          </td>
+
+                          <td>{criterion.value_text}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+          </section>
         )}
       </main>
     </div>
