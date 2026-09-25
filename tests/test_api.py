@@ -442,3 +442,89 @@ def test_create_cohort_criterion_rejects_duplicate_order():
                     """,
                     (cohort_id,),
                 )
+def test_delete_cohort_criterion():
+    cohort_response = client.post(
+        "/cohorts",
+        json={
+            "cohort_name": "Delete Criterion Test Cohort",
+            "description": "Temporary cohort for criterion deletion testing",
+            "study_start_date": "2020-01-01",
+            "study_end_date": "2025-12-31",
+        },
+    )
+
+    assert cohort_response.status_code == 201
+
+    cohort_id = cohort_response.json()["cohort_definition_id"]
+
+    try:
+        criterion_response = client.post(
+            f"/cohorts/{cohort_id}/criteria",
+            json={
+                "criterion_order": 1,
+                "criterion_type": "inclusion",
+                "domain": "diagnosis",
+                "field_name": "diagnosis_code",
+                "operator": "=",
+                "value_text": "E11.9",
+            },
+        )
+
+        assert criterion_response.status_code == 201
+
+        criterion_id = criterion_response.json()["cohort_criterion_id"]
+
+        delete_response = client.delete(
+            f"/cohorts/{cohort_id}/criteria/{criterion_id}"
+        )
+
+        assert delete_response.status_code == 200
+        assert delete_response.json() == {
+            "status": "deleted",
+            "cohort_definition_id": cohort_id,
+            "cohort_criterion_id": criterion_id,
+        }
+
+        criteria_response = client.get(
+            f"/cohorts/{cohort_id}/criteria"
+        )
+
+        assert criteria_response.status_code == 200
+        assert criteria_response.json() == []
+
+    finally:
+        with get_connection() as connection:
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    """
+                    DELETE FROM cohort_criteria
+                    WHERE cohort_definition_id = %s
+                    """,
+                    (cohort_id,),
+                )
+
+                cursor.execute(
+                    """
+                    DELETE FROM cohort_definitions
+                    WHERE cohort_definition_id = %s
+                    """,
+                    (cohort_id,),
+                )
+def test_delete_cohort_criterion_not_found():
+    response = client.delete(
+        "/cohorts/1/criteria/999999"
+    )
+
+    assert response.status_code == 404
+    assert response.json() == {
+        "detail": "Cohort criterion not found",
+    }
+def test_delete_cohort_criterion_cohort_not_found():
+    response = client.delete(
+        "/cohorts/999999/criteria/999999"
+    )
+
+    assert response.status_code == 404
+    assert response.json() == {
+        "detail": "Cohort not found",
+    }

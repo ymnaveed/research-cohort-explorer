@@ -412,3 +412,51 @@ def create_cohort_criterion(
             created_criterion = cursor.fetchone()
 
     return created_criterion
+@app.delete("/cohorts/{cohort_id}/criteria/{criterion_id}")
+def delete_cohort_criterion(
+    cohort_id: int,
+    criterion_id: int,
+):
+    with get_connection() as connection:
+        with connection.cursor(row_factory=dict_row) as cursor:
+            cursor.execute(
+                """
+                SELECT cohort_definition_id
+                FROM cohort_definitions
+                WHERE cohort_definition_id = %s
+                """,
+                (cohort_id,),
+            )
+
+            if cursor.fetchone() is None:
+                raise HTTPException(
+                    status_code=404,
+                    detail="Cohort not found",
+                )
+
+            cursor.execute(
+                """
+                DELETE FROM cohort_criteria
+                WHERE cohort_criterion_id = %s
+                  AND cohort_definition_id = %s
+                RETURNING cohort_criterion_id
+                """,
+                (
+                    criterion_id,
+                    cohort_id,
+                ),
+            )
+
+            deleted_criterion = cursor.fetchone()
+
+            if deleted_criterion is None:
+                raise HTTPException(
+                    status_code=404,
+                    detail="Cohort criterion not found",
+                )
+
+    return {
+        "status": "deleted",
+        "cohort_definition_id": cohort_id,
+        "cohort_criterion_id": criterion_id,
+    }
