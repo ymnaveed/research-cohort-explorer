@@ -6,11 +6,22 @@ from psycopg.rows import dict_row
 
 from backend.app.database import get_connection
 
+
 class CohortCreate(BaseModel):
     cohort_name: str
     description: str | None = None
     study_start_date: date
     study_end_date: date
+
+
+class CohortCriterionCreate(BaseModel):
+    criterion_order: int
+    criterion_type: str = "inclusion"
+    domain: str
+    field_name: str
+    operator: str
+    value_text: str
+
 
 app = FastAPI(
     title="Research Cohort Explorer API",
@@ -209,6 +220,8 @@ def execute_cohort_endpoint(cohort_id: int):
         "cohort_name": cohort["cohort_name"],
         "member_count": result["member_count"],
     }
+
+
 @app.post("/cohorts", status_code=201)
 def create_cohort(cohort: CohortCreate):
     if cohort.study_end_date < cohort.study_start_date:
@@ -247,3 +260,136 @@ def create_cohort(cohort: CohortCreate):
             created_cohort = cursor.fetchone()
 
     return created_cohort
+
+
+@app.post("/cohorts/{cohort_id}/criteria", status_code=201)
+def create_cohort_criterion(
+    cohort_id: int,
+    criterion: CohortCriterionCreate,
+):
+    if criterion.criterion_order < 1:
+        raise HTTPException(
+            status_code=400,
+            detail="Criterion order must be at least 1",
+        )
+
+    if criterion.criterion_type not in {"inclusion", "exclusion"}:
+        raise HTTPException(
+            status_code=400,
+            detail="Criterion type must be inclusion or exclusion",
+        )
+
+    if (
+        criterion.criterion_type == "exclusion"
+        and criterion.domain != "diagnosis"
+    ):
+        raise HTTPException(
+            status_code=400,
+            detail="Cohort Engine v1 supports exclusions only for diagnosis criteria",
+        )
+
+    with get_connection() as connection:
+        with connection.cursor(row_factory=dict_row) as cursor:
+            cursor.execute(
+                """
+                SELECT cohort_definition_id
+                FROM cohort_definitions
+                WHERE cohort_definition_id = %s
+                """,
+                (cohort_id,),
+            )
+
+            if cursor.fetchone() is None:
+                raise HTTPException(
+                    status_code=404,
+                    detail="Cohort not found",
+                )
+
+            cursor.execute(
+                """
+                SELECT
+                    criterion_whitelist_id,
+                    value_type
+                FROM cohort_criterion_whitelist
+                WHERE domain = %s
+                  AND field_name = %s
+                  AND operator = %s
+                """,
+                (
+                    criterion.domain,
+                    criterion.field_name,
+                    criterion.operator,
+                ),
+            )
+
+            whitelist_entry = cursor.fetchone()
+
+            if whitelist_entry is None:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Unsupported cohort criterion",
+                )
+
+            value_type = whitelist_entry["value_type"]
+
+            if value_type != "text":
+                postgres_type = {
+                    "integer": "integer",
+                    "numeric": "numeric",
+                    "date": "date",
+                }[value_type]
+
+                cursor.execute(
+                    """
+                    SELECT pg_input_is_valid(%s, %s) AS is_valid
+                    """,
+                    (
+                        criterion.value_text,
+                        postgres_type,
+                    ),
+                )
+
+                value_validation = cursor.fetchone()
+
+                if not value_validation["is_valid"]:
+                    raise HTTPException(
+                        status_code=400,
+                        detail=f"Invalid value for criterion type {value_type}",
+                    )
+
+            cursor.execute(
+                """
+                INSERT INTO cohort_criteria (
+                    cohort_definition_id,
+                    criterion_order,
+                    criterion_type,
+                    domain,
+                    field_name,
+                    operator,
+                    value_text
+                )
+                VALUES (%s, %s, %s, %s, %s, %s, %s)
+                RETURNING
+                    cohort_criterion_id,
+                    cohort_definition_id,
+                    criterion_order,
+                    criterion_type,
+                    domain,
+                    field_name,
+                    operator,
+                    value_text
+                """,
+                (
+                    cohort_id,
+                    criterion.criterion_order,
+                    criterion.criterion_type,
+                    criterion.domain,
+                    criterion.field_name,
+                    criterion.operator,
+                    criterion.value_text,
+                ),
+            )
+
+            created_criterion = cursor.fetchone()
+
+    return created_criterion

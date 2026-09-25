@@ -146,3 +146,234 @@ def test_create_cohort():
                     """,
                     (cohort_id,),
                 )    
+def test_create_cohort_criterion():
+    cohort_response = client.post(
+        "/cohorts",
+        json={
+            "cohort_name": "Criterion API Test Cohort",
+            "description": "Temporary cohort for criterion API testing",
+            "study_start_date": "2020-01-01",
+            "study_end_date": "2025-12-31",
+        },
+    )
+
+    assert cohort_response.status_code == 201
+
+    cohort_id = cohort_response.json()["cohort_definition_id"]
+
+    try:
+        response = client.post(
+            f"/cohorts/{cohort_id}/criteria",
+            json={
+                "criterion_order": 1,
+                "criterion_type": "inclusion",
+                "domain": "demographics",
+                "field_name": "age_at_study_end",
+                "operator": ">=",
+                "value_text": "18",
+            },
+        )
+
+        assert response.status_code == 201
+
+        data = response.json()
+
+        assert data["cohort_definition_id"] == cohort_id
+        assert data["criterion_order"] == 1
+        assert data["criterion_type"] == "inclusion"
+        assert data["domain"] == "demographics"
+        assert data["field_name"] == "age_at_study_end"
+        assert data["operator"] == ">="
+        assert data["value_text"] == "18"
+
+    finally:
+        with get_connection() as connection:
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    """
+                    DELETE FROM cohort_criteria
+                    WHERE cohort_definition_id = %s
+                    """,
+                    (cohort_id,),
+                )
+
+                cursor.execute(
+                    """
+                    DELETE FROM cohort_definitions
+                    WHERE cohort_definition_id = %s
+                    """,
+                    (cohort_id,),
+                )
+def test_create_cohort_criterion_rejects_invalid_value_type():
+    cohort_response = client.post(
+        "/cohorts",
+        json={
+            "cohort_name": "Invalid Criterion Value Test Cohort",
+            "description": "Temporary cohort for criterion value validation testing",
+            "study_start_date": "2020-01-01",
+            "study_end_date": "2025-12-31",
+        },
+    )
+
+    assert cohort_response.status_code == 201
+
+    cohort_id = cohort_response.json()["cohort_definition_id"]
+
+    try:
+        response = client.post(
+            f"/cohorts/{cohort_id}/criteria",
+            json={
+                "criterion_order": 1,
+                "criterion_type": "inclusion",
+                "domain": "demographics",
+                "field_name": "age_at_study_end",
+                "operator": ">=",
+                "value_text": "abc",
+            },
+        )
+
+        assert response.status_code == 400
+        assert response.json() == {
+            "detail": "Invalid value for criterion type integer",
+        }
+
+    finally:
+        with get_connection() as connection:
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    """
+                    DELETE FROM cohort_criteria
+                    WHERE cohort_definition_id = %s
+                    """,
+                    (cohort_id,),
+                )
+
+                cursor.execute(
+                    """
+                    DELETE FROM cohort_definitions
+                    WHERE cohort_definition_id = %s
+                    """,
+                    (cohort_id,),
+                )
+def test_create_cohort_criterion_rejects_unsupported_criterion():
+    cohort_response = client.post(
+        "/cohorts",
+        json={
+            "cohort_name": "Unsupported Criterion Test Cohort",
+            "description": "Temporary cohort for whitelist validation testing",
+            "study_start_date": "2020-01-01",
+            "study_end_date": "2025-12-31",
+        },
+    )
+
+    assert cohort_response.status_code == 201
+
+    cohort_id = cohort_response.json()["cohort_definition_id"]
+
+    try:
+        response = client.post(
+            f"/cohorts/{cohort_id}/criteria",
+            json={
+                "criterion_order": 1,
+                "criterion_type": "inclusion",
+                "domain": "demographics",
+                "field_name": "race",
+                "operator": "=",
+                "value_text": "White",
+            },
+        )
+
+        assert response.status_code == 400
+        assert response.json() == {
+            "detail": "Unsupported cohort criterion",
+        }
+
+    finally:
+        with get_connection() as connection:
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    """
+                    DELETE FROM cohort_criteria
+                    WHERE cohort_definition_id = %s
+                    """,
+                    (cohort_id,),
+                )
+
+                cursor.execute(
+                    """
+                    DELETE FROM cohort_definitions
+                    WHERE cohort_definition_id = %s
+                    """,
+                    (cohort_id,),
+                )
+def test_create_cohort_criterion_rejects_non_diagnosis_exclusion():
+    cohort_response = client.post(
+        "/cohorts",
+        json={
+            "cohort_name": "Exclusion Rule Test Cohort",
+            "description": "Temporary cohort for exclusion rule testing",
+            "study_start_date": "2020-01-01",
+            "study_end_date": "2025-12-31",
+        },
+    )
+
+    assert cohort_response.status_code == 201
+
+    cohort_id = cohort_response.json()["cohort_definition_id"]
+
+    try:
+        response = client.post(
+            f"/cohorts/{cohort_id}/criteria",
+            json={
+                "criterion_order": 1,
+                "criterion_type": "exclusion",
+                "domain": "medication",
+                "field_name": "medication_code",
+                "operator": "=",
+                "value_text": "TEST",
+            },
+        )
+
+        assert response.status_code == 400
+        assert response.json() == {
+            "detail": (
+                "Cohort Engine v1 supports exclusions only "
+                "for diagnosis criteria"
+            ),
+        }
+
+    finally:
+        with get_connection() as connection:
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    """
+                    DELETE FROM cohort_criteria
+                    WHERE cohort_definition_id = %s
+                    """,
+                    (cohort_id,),
+                )
+
+                cursor.execute(
+                    """
+                    DELETE FROM cohort_definitions
+                    WHERE cohort_definition_id = %s
+                    """,
+                    (cohort_id,),
+                )
+def test_create_cohort_criterion_cohort_not_found():
+    response = client.post(
+        "/cohorts/999999/criteria",
+        json={
+            "criterion_order": 1,
+            "criterion_type": "inclusion",
+            "domain": "demographics",
+            "field_name": "age_at_study_end",
+            "operator": ">=",
+            "value_text": "18",
+        },
+    )
+
+    assert response.status_code == 404
+    assert response.json() == {
+        "detail": "Cohort not found",
+    }
