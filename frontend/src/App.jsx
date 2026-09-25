@@ -3,6 +3,29 @@ import "./App.css";
 
 const API_BASE_URL = "http://127.0.0.1:8000";
 
+const CRITERION_OPTIONS = {
+  demographics: {
+    age_at_study_end: [">="],
+  },
+  diagnosis: {
+    diagnosis_code: ["="],
+    recorded_date: [">=", "<="],
+  },
+  encounter: {
+    encounter_type_code: ["="],
+  },
+  laboratory: {
+    result_numeric: [">=", "<="],
+    test_code: ["="],
+  },
+  medication: {
+    medication_code: ["="],
+  },
+  procedure: {
+    procedure_code: ["="],
+  },
+};
+
 function App() {
   const [cohorts, setCohorts] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -16,6 +39,14 @@ function App() {
   const [executionLoading, setExecutionLoading] = useState(false);
   const [executionError, setExecutionError] = useState("");
   const [executionResult, setExecutionResult] = useState(null);
+
+  const [criterionType, setCriterionType] = useState("inclusion");
+  const [criterionDomain, setCriterionDomain] = useState("diagnosis");
+  const [criterionField, setCriterionField] = useState("diagnosis_code");
+  const [criterionOperator, setCriterionOperator] = useState("=");
+  const [criterionValue, setCriterionValue] = useState("");
+  const [criterionSaving, setCriterionSaving] = useState(false);
+  const [criterionSaveError, setCriterionSaveError] = useState("");
 
   useEffect(() => {
     async function loadCohorts() {
@@ -46,6 +77,13 @@ function App() {
 
     setExecutionResult(null);
     setExecutionError("");
+
+    setCriterionType("inclusion");
+    setCriterionDomain("diagnosis");
+    setCriterionField("diagnosis_code");
+    setCriterionOperator("=");
+    setCriterionValue("");
+    setCriterionSaveError("");
 
     try {
       const response = await fetch(
@@ -83,7 +121,11 @@ function App() {
       );
 
       if (!response.ok) {
-        throw new Error(`API request failed: ${response.status}`);
+        const errorData = await response.json().catch(() => null);
+
+        throw new Error(
+          errorData?.detail || `API request failed: ${response.status}`,
+        );
       }
 
       const data = await response.json();
@@ -94,6 +136,124 @@ function App() {
       setExecutionLoading(false);
     }
   }
+
+  function handleTypeChange(event) {
+    const newType = event.target.value;
+
+    setCriterionType(newType);
+    setCriterionSaveError("");
+
+    if (newType === "exclusion") {
+      setCriterionDomain("diagnosis");
+      setCriterionField("diagnosis_code");
+      setCriterionOperator("=");
+    }
+  }
+
+  function handleDomainChange(event) {
+    const newDomain = event.target.value;
+    const fields = Object.keys(CRITERION_OPTIONS[newDomain]);
+    const firstField = fields[0];
+    const firstOperator = CRITERION_OPTIONS[newDomain][firstField][0];
+
+    setCriterionDomain(newDomain);
+    setCriterionField(firstField);
+    setCriterionOperator(firstOperator);
+    setCriterionSaveError("");
+  }
+
+  function handleFieldChange(event) {
+    const newField = event.target.value;
+    const firstOperator =
+      CRITERION_OPTIONS[criterionDomain][newField][0];
+
+    setCriterionField(newField);
+    setCriterionOperator(firstOperator);
+    setCriterionSaveError("");
+  }
+
+  async function addCriterion(event) {
+    event.preventDefault();
+
+    if (!selectedCohort) {
+      return;
+    }
+
+    const trimmedValue = criterionValue.trim();
+
+    if (!trimmedValue) {
+      setCriterionSaveError("Criterion value is required.");
+      return;
+    }
+
+    const nextOrder =
+      criteria.length === 0
+        ? 1
+        : Math.max(
+            ...criteria.map((criterion) => criterion.criterion_order),
+          ) + 1;
+
+    const newCriterion = {
+      criterion_order: nextOrder,
+      criterion_type: criterionType,
+      domain: criterionDomain,
+      field_name: criterionField,
+      operator: criterionOperator,
+      value_text: trimmedValue,
+    };
+
+    setCriterionSaving(true);
+    setCriterionSaveError("");
+
+    try {
+      const response = await fetch(
+        `${API_BASE_URL}/cohorts/${selectedCohort.cohort_definition_id}/criteria`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(newCriterion),
+        },
+      );
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => null);
+
+        throw new Error(
+          errorData?.detail || `API request failed: ${response.status}`,
+        );
+      }
+
+      const createdCriterion = await response.json();
+
+      setCriteria((currentCriteria) =>
+        [...currentCriteria, createdCriterion].sort(
+          (a, b) => a.criterion_order - b.criterion_order,
+        ),
+      );
+
+      setCriterionValue("");
+      setExecutionResult(null);
+      setExecutionError("");
+    } catch (err) {
+      setCriterionSaveError(err.message);
+    } finally {
+      setCriterionSaving(false);
+    }
+  }
+
+  const availableDomains =
+    criterionType === "exclusion"
+      ? ["diagnosis"]
+      : Object.keys(CRITERION_OPTIONS);
+
+  const availableFields = Object.keys(
+    CRITERION_OPTIONS[criterionDomain],
+  );
+
+  const availableOperators =
+    CRITERION_OPTIONS[criterionDomain][criterionField];
 
   return (
     <div className="app">
@@ -242,6 +402,114 @@ function App() {
                 </div>
               </div>
             )}
+
+            <section className="criterion-form-card">
+              <div className="criterion-form-heading">
+                <div>
+                  <h3>Add criterion</h3>
+                  <p>
+                    Add a supported rule to the selected cohort definition.
+                  </p>
+                </div>
+              </div>
+
+              <form className="criterion-form" onSubmit={addCriterion}>
+                <div className="form-field">
+                  <label htmlFor="criterion-type">Type</label>
+                  <select
+                    id="criterion-type"
+                    value={criterionType}
+                    onChange={handleTypeChange}
+                  >
+                    <option value="inclusion">Inclusion</option>
+                    <option value="exclusion">Exclusion</option>
+                  </select>
+                </div>
+
+                <div className="form-field">
+                  <label htmlFor="criterion-domain">Domain</label>
+                  <select
+                    id="criterion-domain"
+                    value={criterionDomain}
+                    onChange={handleDomainChange}
+                  >
+                    {availableDomains.map((domain) => (
+                      <option key={domain} value={domain}>
+                        {domain}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="form-field">
+                  <label htmlFor="criterion-field">Field</label>
+                  <select
+                    id="criterion-field"
+                    value={criterionField}
+                    onChange={handleFieldChange}
+                  >
+                    {availableFields.map((field) => (
+                      <option key={field} value={field}>
+                        {field}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="form-field">
+                  <label htmlFor="criterion-operator">Operator</label>
+                  <select
+                    id="criterion-operator"
+                    value={criterionOperator}
+                    onChange={(event) => {
+                      setCriterionOperator(event.target.value);
+                      setCriterionSaveError("");
+                    }}
+                  >
+                    {availableOperators.map((operator) => (
+                      <option key={operator} value={operator}>
+                        {operator}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="form-field value-field">
+                  <label htmlFor="criterion-value">Value</label>
+                  <input
+                    id="criterion-value"
+                    type="text"
+                    value={criterionValue}
+                    onChange={(event) => {
+                      setCriterionValue(event.target.value);
+                      setCriterionSaveError("");
+                    }}
+                    placeholder="Enter criterion value"
+                  />
+                </div>
+
+                <button
+                  type="submit"
+                  className="add-criterion-button"
+                  disabled={criterionSaving}
+                >
+                  {criterionSaving ? "Adding..." : "Add criterion"}
+                </button>
+              </form>
+
+              {criterionType === "exclusion" && (
+                <p className="form-note">
+                  Cohort Engine v1 supports exclusion criteria only for the
+                  diagnosis domain.
+                </p>
+              )}
+
+              {criterionSaveError && (
+                <div className="form-error">
+                  {criterionSaveError}
+                </div>
+              )}
+            </section>
 
             {criteriaLoading && (
               <div className="state-card">

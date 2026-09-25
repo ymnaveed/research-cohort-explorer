@@ -430,3 +430,144 @@
     grid-template-columns: 1fr;
   }
 }
+/* Add criterion form */
+
+.criterion-form-card {
+  margin-bottom: 20px;
+  padding: 22px;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+}
+
+.criterion-form-heading {
+  margin-bottom: 18px;
+}
+
+.criterion-form-heading h3 {
+  margin: 0;
+  color: #0f172a;
+  font-size: 1rem;
+}
+
+.criterion-form-heading p {
+  margin: 6px 0 0;
+  color: #64748b;
+  font-size: 0.82rem;
+}
+
+.criterion-form {
+  display: grid;
+  grid-template-columns:
+    minmax(120px, 0.8fr)
+    minmax(140px, 1fr)
+    minmax(180px, 1.3fr)
+    minmax(100px, 0.65fr)
+    minmax(180px, 1.4fr)
+    auto;
+  gap: 12px;
+  align-items: end;
+}
+
+.form-field {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.form-field label {
+  color: #475569;
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+.form-field select,
+.form-field input {
+  width: 100%;
+  height: 40px;
+  padding: 0 10px;
+  color: #334155;
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
+  border-radius: 7px;
+  outline: none;
+  font-size: 0.8rem;
+  transition:
+    border-color 150ms ease,
+    box-shadow 150ms ease;
+}
+
+.form-field select:focus,
+.form-field input:focus {
+  border-color: #2563eb;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+}
+
+.form-field input::placeholder {
+  color: #94a3b8;
+}
+
+.add-criterion-button {
+  height: 40px;
+  padding: 0 15px;
+  color: #ffffff;
+  background: #2563eb;
+  border: 0;
+  border-radius: 7px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  white-space: nowrap;
+  transition:
+    background 150ms ease,
+    opacity 150ms ease;
+}
+
+.add-criterion-button:hover:not(:disabled) {
+  background: #1d4ed8;
+}
+
+.add-criterion-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.add-criterion-button:focus-visible {
+  outline: 3px solid rgba(37, 99, 235, 0.2);
+  outline-offset: 2px;
+}
+
+.form-note {
+  margin: 14px 0 0;
+  color: #64748b;
+  font-size: 0.78rem;
+}
+
+.form-error {
+  margin-top: 14px;
+  padding: 10px 12px;
+  color: #991b1b;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  border-radius: 7px;
+  font-size: 0.8rem;
+}
+
+/* Add criterion responsive layout */
+
+@media (max-width: 1050px) {
+  .criterion-form {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .add-criterion-button {
+    width: 100%;
+  }
+}
+
+@media (max-width: 600px) {
+  .criterion-form {
+    grid-template-columns: 1fr;
+  }
+}
