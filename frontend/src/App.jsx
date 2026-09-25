@@ -13,6 +13,10 @@ function App() {
   const [criteriaLoading, setCriteriaLoading] = useState(false);
   const [criteriaError, setCriteriaError] = useState("");
 
+  const [executionLoading, setExecutionLoading] = useState(false);
+  const [executionError, setExecutionError] = useState("");
+  const [executionResult, setExecutionResult] = useState(null);
+
   useEffect(() => {
     async function loadCohorts() {
       try {
@@ -40,6 +44,9 @@ function App() {
     setCriteriaError("");
     setCriteriaLoading(true);
 
+    setExecutionResult(null);
+    setExecutionError("");
+
     try {
       const response = await fetch(
         `${API_BASE_URL}/cohorts/${cohort.cohort_definition_id}/criteria`,
@@ -55,6 +62,36 @@ function App() {
       setCriteriaError(err.message);
     } finally {
       setCriteriaLoading(false);
+    }
+  }
+
+  async function executeCohort() {
+    if (!selectedCohort) {
+      return;
+    }
+
+    setExecutionLoading(true);
+    setExecutionError("");
+    setExecutionResult(null);
+
+    try {
+      const response = await fetch(
+        `${API_BASE_URL}/cohorts/${selectedCohort.cohort_definition_id}/execute`,
+        {
+          method: "POST",
+        },
+      );
+
+      if (!response.ok) {
+        throw new Error(`API request failed: ${response.status}`);
+      }
+
+      const data = await response.json();
+      setExecutionResult(data);
+    } catch (err) {
+      setExecutionError(err.message);
+    } finally {
+      setExecutionLoading(false);
     }
   }
 
@@ -166,10 +203,45 @@ function App() {
                 <h2>{selectedCohort.cohort_name}</h2>
               </div>
 
-              <span className="cohort-count">
-                {criteria.length} {criteria.length === 1 ? "criterion" : "criteria"}
-              </span>
+              <div className="selected-cohort-actions">
+                <span className="cohort-count">
+                  {criteria.length}{" "}
+                  {criteria.length === 1 ? "criterion" : "criteria"}
+                </span>
+
+                <button
+                  type="button"
+                  className="execute-button"
+                  onClick={executeCohort}
+                  disabled={executionLoading}
+                >
+                  {executionLoading ? "Running..." : "Run cohort"}
+                </button>
+              </div>
             </div>
+
+            {executionError && (
+              <div className="state-card error-card execution-message">
+                <h3>Cohort execution failed</h3>
+                <p>{executionError}</p>
+              </div>
+            )}
+
+            {executionResult && (
+              <div className="execution-result">
+                <div>
+                  <span className="result-label">Execution status</span>
+                  <strong>{executionResult.status}</strong>
+                </div>
+
+                <div>
+                  <span className="result-label">Cohort members</span>
+                  <strong className="member-count">
+                    {executionResult.member_count.toLocaleString()}
+                  </strong>
+                </div>
+              </div>
+            )}
 
             {criteriaLoading && (
               <div className="state-card">

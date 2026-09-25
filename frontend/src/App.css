@@ -237,11 +237,92 @@
 .error-card h3 {
   color: #991b1b;
 }
+
+/* Selected cohort and criteria */
+
 .criteria-section {
   margin-top: 42px;
   padding-top: 38px;
   border-top: 1px solid #e2e8f0;
 }
+
+.selected-cohort-actions {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.execute-button {
+  padding: 10px 16px;
+  color: #ffffff;
+  background: #0f172a;
+  border: 0;
+  border-radius: 8px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  transition:
+    background 150ms ease,
+    opacity 150ms ease;
+}
+
+.execute-button:hover:not(:disabled) {
+  background: #334155;
+}
+
+.execute-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.execute-button:focus-visible {
+  outline: 3px solid rgba(15, 23, 42, 0.2);
+  outline-offset: 2px;
+}
+
+/* Cohort execution results */
+
+.execution-result {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(180px, 1fr));
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.execution-result > div {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 18px 20px;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+}
+
+.result-label {
+  color: #64748b;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.execution-result strong {
+  color: #166534;
+  font-size: 1rem;
+  text-transform: capitalize;
+}
+
+.execution-result .member-count {
+  color: #0f172a;
+  font-size: 1.6rem;
+  line-height: 1.1;
+}
+
+.execution-message {
+  margin-bottom: 20px;
+}
+
+/* Criteria table */
 
 .criteria-table-wrapper {
   overflow-x: auto;
@@ -288,7 +369,8 @@
   color: #1e40af;
   background: #eff6ff;
   border-radius: 5px;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-family:
+    ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
   font-size: 0.8rem;
 }
 
@@ -310,6 +392,9 @@
   color: #991b1b;
   background: #fee2e2;
 }
+
+/* Responsive layout */
+
 @media (max-width: 700px) {
   .app-header {
     align-items: flex-start;
@@ -328,6 +413,20 @@
   }
 
   .cohort-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .selected-cohort-actions {
+    width: 100%;
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .execute-button {
+    width: 100%;
+  }
+
+  .execution-result {
     grid-template-columns: 1fr;
   }
 }
