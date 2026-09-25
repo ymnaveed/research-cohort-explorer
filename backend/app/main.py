@@ -359,6 +359,25 @@ def create_cohort_criterion(
 
             cursor.execute(
                 """
+                SELECT cohort_criterion_id
+                FROM cohort_criteria
+                WHERE cohort_definition_id = %s
+                  AND criterion_order = %s
+                """,
+                (
+                    cohort_id,
+                    criterion.criterion_order,
+                ),
+            )
+
+            if cursor.fetchone() is not None:
+                raise HTTPException(
+                    status_code=409,
+                    detail="Criterion order already exists for this cohort",
+                )
+
+            cursor.execute(
+                """
                 INSERT INTO cohort_criteria (
                     cohort_definition_id,
                     criterion_order,

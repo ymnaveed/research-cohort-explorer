@@ -377,3 +377,68 @@ def test_create_cohort_criterion_cohort_not_found():
     assert response.json() == {
         "detail": "Cohort not found",
     }
+def test_create_cohort_criterion_rejects_duplicate_order():
+    cohort_response = client.post(
+        "/cohorts",
+        json={
+            "cohort_name": "Duplicate Criterion Order Test Cohort",
+            "description": "Temporary cohort for duplicate order testing",
+            "study_start_date": "2020-01-01",
+            "study_end_date": "2025-12-31",
+        },
+    )
+
+    assert cohort_response.status_code == 201
+
+    cohort_id = cohort_response.json()["cohort_definition_id"]
+
+    try:
+        first_response = client.post(
+            f"/cohorts/{cohort_id}/criteria",
+            json={
+                "criterion_order": 1,
+                "criterion_type": "inclusion",
+                "domain": "demographics",
+                "field_name": "age_at_study_end",
+                "operator": ">=",
+                "value_text": "18",
+            },
+        )
+
+        assert first_response.status_code == 201
+
+        duplicate_response = client.post(
+            f"/cohorts/{cohort_id}/criteria",
+            json={
+                "criterion_order": 1,
+                "criterion_type": "inclusion",
+                "domain": "diagnosis",
+                "field_name": "diagnosis_code",
+                "operator": "=",
+                "value_text": "E11.9",
+            },
+        )
+
+        assert duplicate_response.status_code == 409
+        assert duplicate_response.json() == {
+            "detail": "Criterion order already exists for this cohort",
+        }
+
+    finally:
+        with get_connection() as connection:
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    """
+                    DELETE FROM cohort_criteria
+                    WHERE cohort_definition_id = %s
+                    """,
+                    (cohort_id,),
+                )
+
+                cursor.execute(
+                    """
+                    DELETE FROM cohort_definitions
+                    WHERE cohort_definition_id = %s
+                    """,
+                    (cohort_id,),
+                )
