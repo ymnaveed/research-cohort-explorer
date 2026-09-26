@@ -66,7 +66,29 @@ function App() {
   const [membersLoading, setMembersLoading] = useState(false);
   const [membersError, setMembersError] = useState("");
 
+  const [apiStatus, setApiStatus] = useState("checking");
+
   useEffect(() => {
+    async function checkApiHealth() {
+      try {
+        const response = await fetch(
+          `${API_BASE_URL}/health/database`,
+        );
+
+        if (!response.ok) {
+          throw new Error("API health check failed");
+        }
+
+        const data = await response.json();
+
+        setApiStatus(
+          data.status === "ok" ? "connected" : "unavailable",
+        );
+      } catch {
+        setApiStatus("unavailable");
+      }
+    }
+
     async function loadCohorts() {
       try {
         const response = await fetch(`${API_BASE_URL}/cohorts`);
@@ -84,6 +106,7 @@ function App() {
       }
     }
 
+    checkApiHealth();
     loadCohorts();
   }, []);
 
@@ -478,6 +501,13 @@ function App() {
     memberCount,
   );
 
+  const apiStatusLabel =
+    apiStatus === "connected"
+      ? "API connected"
+      : apiStatus === "unavailable"
+        ? "API unavailable"
+        : "Checking API...";
+
   return (
     <div className="app">
       <header className="app-header">
@@ -489,9 +519,9 @@ function App() {
           </p>
         </div>
 
-        <div className="api-status">
+        <div className={`api-status ${apiStatus}`}>
           <span className="status-dot" />
-          API connected
+          {apiStatusLabel}
         </div>
       </header>
 

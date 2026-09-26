@@ -36,25 +36,53 @@
   font-size: 0.95rem;
 }
 
+/* API status */
+
 .api-status {
   display: inline-flex;
   align-items: center;
   gap: 8px;
   padding: 9px 13px;
-  color: #166534;
-  background: #f0fdf4;
-  border: 1px solid #bbf7d0;
   border-radius: 999px;
   font-size: 0.8rem;
   font-weight: 600;
   white-space: nowrap;
 }
 
+.api-status.connected {
+  color: #166534;
+  background: #f0fdf4;
+  border: 1px solid #bbf7d0;
+}
+
+.api-status.checking {
+  color: #854d0e;
+  background: #fefce8;
+  border: 1px solid #fde68a;
+}
+
+.api-status.unavailable {
+  color: #991b1b;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+}
+
 .status-dot {
   width: 8px;
   height: 8px;
-  background: #22c55e;
   border-radius: 50%;
+}
+
+.api-status.connected .status-dot {
+  background: #22c55e;
+}
+
+.api-status.checking .status-dot {
+  background: #eab308;
+}
+
+.api-status.unavailable .status-dot {
+  background: #ef4444;
 }
 
 .content {
@@ -430,6 +458,7 @@
     grid-template-columns: 1fr;
   }
 }
+
 /* Add criterion form */
 
 .criterion-form-card {
@@ -571,6 +600,7 @@
     grid-template-columns: 1fr;
   }
 }
+
 /* Delete criterion */
 
 .delete-criterion-button {
@@ -602,6 +632,7 @@
   outline: 3px solid rgba(185, 28, 28, 0.15);
   outline-offset: 2px;
 }
+
 /* Create cohort */
 
 .create-cohort-section {
@@ -693,6 +724,7 @@
     grid-template-columns: 1fr;
   }
 }
+
 /* Cohort members */
 
 .members-section {
