@@ -23,6 +23,20 @@ The project was designed as an end-to-end data engineering and analytics applica
 
 The application separates the data, cohort engine, API, and user interface into independent layers.
 
+## Application Preview
+
+### Cohort Dashboard
+
+The dashboard provides cohort management, cohort creation, and real-time API/database connection status.
+
+![Research Cohort Explorer dashboard](docs/screenshots/cohort-dashboard.png)
+
+### Cohort Definition and Members
+
+Cohort details expose the stored criteria, execution results, and paginated synthetic patient membership.
+
+![Research Cohort Explorer cohort details](docs/screenshots/cohort-details.png)
+
 ## Architecture
 
 ```text
