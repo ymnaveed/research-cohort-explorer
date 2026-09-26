@@ -214,13 +214,20 @@ The cohort engine includes several controls to prevent arbitrary SQL constructio
 - controlled cohort membership persistence
 - cohort execution audit logging
 
-## Example Cohort
+## Demo Cohort Library
 
-The development database includes an example cohort:
+The project includes six reproducible demonstration cohorts that exercise the supported Cohort Engine v1 domains and diagnosis exclusion logic.
 
-**Adult Type 2 Diabetes**
+| Cohort | Demonstrates | Expected Members |
+|---|---|---:|
+| Adult Type 2 Diabetes | Demographics + diagnosis + date criteria | 6,620 |
+| Elevated HbA1c | Laboratory code + numeric threshold | 7,182 |
+| Metformin Users | Medication criterion | 8,423 |
+| Echocardiogram Patients | Procedure criterion | 31,696 |
+| Emergency Department Patients | Encounter criterion | 65,677 |
+| Hypertension Without Type 2 Diabetes | Diagnosis inclusion + exclusion | 17,760 |
 
-Criteria:
+The canonical **Adult Type 2 Diabetes** cohort uses:
 
 ```text
 Diagnosis code = E11.9
@@ -229,11 +236,13 @@ Diagnosis recorded date >= 2015-01-01
 Diagnosis recorded date <= 2025-12-31
 ```
 
-The validated synthetic dataset produces:
+The validated synthetic dataset produces **6,620 members** for this cohort, and the result is checked by the database regression suite.
 
-**6,620 cohort members**
+The reproducible cohort definitions are stored in:
 
-This result is also checked by the database regression suite.
+```text
+database/seed/demo_cohorts.sql
+```
 
 ## Backend API
 
@@ -325,6 +334,7 @@ research-cohort-explorer/
 │   ├── queries/
 │   ├── schema/
 │   ├── seed/
+│   │   └── demo_cohorts.sql
 │   ├── views/
 │   └── init.sql
 │
@@ -434,7 +444,28 @@ and is excluded from version control.
 
 The repository separates schema initialization from large synthetic dataset generation/loading so database infrastructure can be developed independently from generated test data.
 
-### 6. Start the Backend
+### 6. Load the Demo Cohort Library
+
+After the synthetic clinical dataset has been generated and loaded, create the reproducible demo cohort library:
+
+```powershell
+Get-Content database\seed\demo_cohorts.sql -Raw | docker exec -i research-cohort-postgres psql -U research_admin -d research_cohort
+```
+
+This creates and executes six demonstration cohorts covering all Cohort Engine v1 inclusion domains and diagnosis exclusion logic:
+
+- Adult Type 2 Diabetes
+- Elevated HbA1c
+- Metformin Users
+- Echocardiogram Patients
+- Emergency Department Patients
+- Hypertension Without Type 2 Diabetes
+
+The script can be run again safely without creating duplicate demo cohort definitions. Existing criteria are replaced with the canonical definitions and cohort membership is rebuilt.
+
+> The demo cohort seed should be run **after** the synthetic clinical dataset has been loaded because cohort execution depends on the populated analytical data.
+
+### 7. Start the Backend
 
 ```powershell
 python -m uvicorn backend.app.main:app --reload
@@ -452,13 +483,13 @@ Interactive API documentation:
 http://127.0.0.1:8000/docs
 ```
 
-### 7. Install Frontend Dependencies
+### 8. Install Frontend Dependencies
 
 ```powershell
 npm --prefix frontend install
 ```
 
-### 8. Start the Frontend
+### 9. Start the Frontend
 
 ```powershell
 npm --prefix frontend run dev
