@@ -602,3 +602,94 @@
   outline: 3px solid rgba(185, 28, 28, 0.15);
   outline-offset: 2px;
 }
+/* Create cohort */
+
+.create-cohort-section {
+  margin-bottom: 42px;
+}
+
+.create-cohort-card {
+  padding: 22px;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+}
+
+.create-cohort-form {
+  display: grid;
+  grid-template-columns:
+    minmax(180px, 1.1fr)
+    minmax(240px, 1.5fr)
+    minmax(150px, 0.8fr)
+    minmax(150px, 0.8fr)
+    auto;
+  gap: 12px;
+  align-items: end;
+}
+
+.create-cohort-button {
+  height: 40px;
+  padding: 0 16px;
+  color: #ffffff;
+  background: #2563eb;
+  border: 0;
+  border-radius: 7px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  white-space: nowrap;
+  transition:
+    background 150ms ease,
+    opacity 150ms ease;
+}
+
+.create-cohort-button:hover:not(:disabled) {
+  background: #1d4ed8;
+}
+
+.create-cohort-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.create-cohort-button:focus-visible {
+  outline: 3px solid rgba(37, 99, 235, 0.2);
+  outline-offset: 2px;
+}
+
+.form-success {
+  margin-top: 14px;
+  padding: 10px 12px;
+  color: #166534;
+  background: #f0fdf4;
+  border: 1px solid #bbf7d0;
+  border-radius: 7px;
+  font-size: 0.8rem;
+}
+
+.cohort-list-section {
+  margin-top: 0;
+}
+
+.status-badge.draft {
+  color: #92400e;
+  background: #fef3c7;
+}
+
+/* Create cohort responsive layout */
+
+@media (max-width: 1050px) {
+  .create-cohort-form {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .create-cohort-button {
+    width: 100%;
+  }
+}
+
+@media (max-width: 600px) {
+  .create-cohort-form {
+    grid-template-columns: 1fr;
+  }
+}

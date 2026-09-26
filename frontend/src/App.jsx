@@ -31,6 +31,14 @@ function App() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
+  const [cohortName, setCohortName] = useState("");
+  const [cohortDescription, setCohortDescription] = useState("");
+  const [cohortStartDate, setCohortStartDate] = useState("");
+  const [cohortEndDate, setCohortEndDate] = useState("");
+  const [cohortSaving, setCohortSaving] = useState(false);
+  const [cohortSaveError, setCohortSaveError] = useState("");
+  const [cohortSaveSuccess, setCohortSaveSuccess] = useState("");
+
   const [selectedCohort, setSelectedCohort] = useState(null);
   const [criteria, setCriteria] = useState([]);
   const [criteriaLoading, setCriteriaLoading] = useState(false);
@@ -71,6 +79,80 @@ function App() {
 
     loadCohorts();
   }, []);
+
+  async function createCohort(event) {
+    event.preventDefault();
+
+    const trimmedName = cohortName.trim();
+    const trimmedDescription = cohortDescription.trim();
+
+    setCohortSaveError("");
+    setCohortSaveSuccess("");
+
+    if (!trimmedName) {
+      setCohortSaveError("Cohort name is required.");
+      return;
+    }
+
+    if (!cohortStartDate || !cohortEndDate) {
+      setCohortSaveError("Study start and end dates are required.");
+      return;
+    }
+
+    if (cohortEndDate < cohortStartDate) {
+      setCohortSaveError(
+        "Study end date cannot be before study start date.",
+      );
+      return;
+    }
+
+    const newCohort = {
+      cohort_name: trimmedName,
+      description: trimmedDescription || null,
+      study_start_date: cohortStartDate,
+      study_end_date: cohortEndDate,
+    };
+
+    setCohortSaving(true);
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/cohorts`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(newCohort),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => null);
+
+        throw new Error(
+          errorData?.detail || `API request failed: ${response.status}`,
+        );
+      }
+
+      const createdCohort = await response.json();
+
+      setCohorts((currentCohorts) => [
+        ...currentCohorts,
+        createdCohort,
+      ]);
+
+      setCohortName("");
+      setCohortDescription("");
+      setCohortStartDate("");
+      setCohortEndDate("");
+
+      setCohortSaveSuccess(
+        `${createdCohort.cohort_name} was created successfully.`,
+      );
+    } catch (err) {
+      setCohortSaveError(err.message);
+    } finally {
+      setCohortSaving(false);
+    }
+  }
 
   async function openCohort(cohort) {
     setSelectedCohort(cohort);
@@ -170,7 +252,8 @@ function App() {
 
   function handleFieldChange(event) {
     const newField = event.target.value;
-    const firstOperator = CRITERION_OPTIONS[criterionDomain][newField][0];
+    const firstOperator =
+      CRITERION_OPTIONS[criterionDomain][newField][0];
 
     setCriterionField(newField);
     setCriterionOperator(firstOperator);
@@ -274,7 +357,8 @@ function App() {
 
       setCriteria((currentCriteria) =>
         currentCriteria.filter(
-          (criterion) => criterion.cohort_criterion_id !== criterionId,
+          (criterion) =>
+            criterion.cohort_criterion_id !== criterionId,
         ),
       );
 
@@ -317,100 +401,210 @@ function App() {
       </header>
 
       <main className="content">
-        <section className="section-header">
-          <div>
-            <p className="section-eyebrow">Cohorts</p>
-            <h2>Available cohorts</h2>
+        <section className="create-cohort-section">
+          <div className="section-header">
+            <div>
+              <p className="section-eyebrow">Cohort builder</p>
+              <h2>Create cohort</h2>
+            </div>
           </div>
 
-          <span className="cohort-count">
-            {cohorts.length} cohort{cohorts.length === 1 ? "" : "s"}
-          </span>
+          <div className="create-cohort-card">
+            <form className="create-cohort-form" onSubmit={createCohort}>
+              <div className="form-field cohort-name-field">
+                <label htmlFor="cohort-name">Cohort name</label>
+                <input
+                  id="cohort-name"
+                  type="text"
+                  value={cohortName}
+                  onChange={(event) => {
+                    setCohortName(event.target.value);
+                    setCohortSaveError("");
+                    setCohortSaveSuccess("");
+                  }}
+                  placeholder="Enter cohort name"
+                />
+              </div>
+
+              <div className="form-field cohort-description-field">
+                <label htmlFor="cohort-description">
+                  Description
+                </label>
+                <input
+                  id="cohort-description"
+                  type="text"
+                  value={cohortDescription}
+                  onChange={(event) => {
+                    setCohortDescription(event.target.value);
+                    setCohortSaveError("");
+                    setCohortSaveSuccess("");
+                  }}
+                  placeholder="Optional description"
+                />
+              </div>
+
+              <div className="form-field">
+                <label htmlFor="cohort-start-date">
+                  Study start
+                </label>
+                <input
+                  id="cohort-start-date"
+                  type="date"
+                  value={cohortStartDate}
+                  onChange={(event) => {
+                    setCohortStartDate(event.target.value);
+                    setCohortSaveError("");
+                    setCohortSaveSuccess("");
+                  }}
+                />
+              </div>
+
+              <div className="form-field">
+                <label htmlFor="cohort-end-date">Study end</label>
+                <input
+                  id="cohort-end-date"
+                  type="date"
+                  value={cohortEndDate}
+                  onChange={(event) => {
+                    setCohortEndDate(event.target.value);
+                    setCohortSaveError("");
+                    setCohortSaveSuccess("");
+                  }}
+                />
+              </div>
+
+              <button
+                type="submit"
+                className="create-cohort-button"
+                disabled={cohortSaving}
+              >
+                {cohortSaving ? "Creating..." : "Create cohort"}
+              </button>
+            </form>
+
+            {cohortSaveError && (
+              <div className="form-error">
+                {cohortSaveError}
+              </div>
+            )}
+
+            {cohortSaveSuccess && (
+              <div className="form-success">
+                {cohortSaveSuccess}
+              </div>
+            )}
+          </div>
         </section>
 
-        {loading && (
-          <div className="state-card">
-            <p>Loading cohorts...</p>
+        <section className="cohort-list-section">
+          <div className="section-header">
+            <div>
+              <p className="section-eyebrow">Cohorts</p>
+              <h2>Available cohorts</h2>
+            </div>
+
+            <span className="cohort-count">
+              {cohorts.length} cohort
+              {cohorts.length === 1 ? "" : "s"}
+            </span>
           </div>
-        )}
 
-        {error && (
-          <div className="state-card error-card">
-            <h3>Unable to load cohorts</h3>
-            <p>{error}</p>
-            <p>Make sure the FastAPI backend is running on port 8000.</p>
-          </div>
-        )}
+          {loading && (
+            <div className="state-card">
+              <p>Loading cohorts...</p>
+            </div>
+          )}
 
-        {!loading && !error && cohorts.length === 0 && (
-          <div className="state-card">
-            <h3>No cohorts found</h3>
-            <p>Create a cohort to begin building a research population.</p>
-          </div>
-        )}
+          {error && (
+            <div className="state-card error-card">
+              <h3>Unable to load cohorts</h3>
+              <p>{error}</p>
+              <p>
+                Make sure the FastAPI backend is running on port 8000.
+              </p>
+            </div>
+          )}
 
-        {!loading && !error && cohorts.length > 0 && (
-          <div className="cohort-grid">
-            {cohorts.map((cohort) => (
-              <article
-                className="cohort-card"
-                key={cohort.cohort_definition_id}
-              >
-                <div className="card-top">
-                  <span className="cohort-id">
-                    Cohort #{cohort.cohort_definition_id}
-                  </span>
+          {!loading && !error && cohorts.length === 0 && (
+            <div className="state-card">
+              <h3>No cohorts found</h3>
+              <p>
+                Create a cohort to begin building a research
+                population.
+              </p>
+            </div>
+          )}
 
-                  <span className={`status-badge ${cohort.status}`}>
-                    {cohort.status}
-                  </span>
-                </div>
+          {!loading && !error && cohorts.length > 0 && (
+            <div className="cohort-grid">
+              {cohorts.map((cohort) => (
+                <article
+                  className="cohort-card"
+                  key={cohort.cohort_definition_id}
+                >
+                  <div className="card-top">
+                    <span className="cohort-id">
+                      Cohort #{cohort.cohort_definition_id}
+                    </span>
 
-                <h3>{cohort.cohort_name}</h3>
-
-                <p className="description">
-                  {cohort.description || "No description provided."}
-                </p>
-
-                <div className="date-range">
-                  <div>
-                    <span>Study start</span>
-                    <strong>{cohort.study_start_date}</strong>
+                    <span
+                      className={`status-badge ${cohort.status}`}
+                    >
+                      {cohort.status}
+                    </span>
                   </div>
 
-                  <div>
-                    <span>Study end</span>
-                    <strong>{cohort.study_end_date}</strong>
+                  <h3>{cohort.cohort_name}</h3>
+
+                  <p className="description">
+                    {cohort.description ||
+                      "No description provided."}
+                  </p>
+
+                  <div className="date-range">
+                    <div>
+                      <span>Study start</span>
+                      <strong>{cohort.study_start_date}</strong>
+                    </div>
+
+                    <div>
+                      <span>Study end</span>
+                      <strong>{cohort.study_end_date}</strong>
+                    </div>
                   </div>
-                </div>
 
-                <div className="card-footer">
-                  <span>Version {cohort.version}</span>
+                  <div className="card-footer">
+                    <span>Version {cohort.version}</span>
 
-                  <button
-                    type="button"
-                    onClick={() => openCohort(cohort)}
-                  >
-                    Open cohort
-                  </button>
-                </div>
-              </article>
-            ))}
-          </div>
-        )}
+                    <button
+                      type="button"
+                      onClick={() => openCohort(cohort)}
+                    >
+                      Open cohort
+                    </button>
+                  </div>
+                </article>
+              ))}
+            </div>
+          )}
+        </section>
 
         {selectedCohort && (
           <section className="criteria-section">
             <div className="section-header">
               <div>
-                <p className="section-eyebrow">Selected cohort</p>
+                <p className="section-eyebrow">
+                  Selected cohort
+                </p>
                 <h2>{selectedCohort.cohort_name}</h2>
               </div>
 
               <div className="selected-cohort-actions">
                 <span className="cohort-count">
                   {criteria.length}{" "}
-                  {criteria.length === 1 ? "criterion" : "criteria"}
+                  {criteria.length === 1
+                    ? "criterion"
+                    : "criteria"}
                 </span>
 
                 <button
@@ -419,7 +613,9 @@ function App() {
                   onClick={executeCohort}
                   disabled={executionLoading}
                 >
-                  {executionLoading ? "Running..." : "Run cohort"}
+                  {executionLoading
+                    ? "Running..."
+                    : "Run cohort"}
                 </button>
               </div>
             </div>
@@ -434,12 +630,16 @@ function App() {
             {executionResult && (
               <div className="execution-result">
                 <div>
-                  <span className="result-label">Execution status</span>
+                  <span className="result-label">
+                    Execution status
+                  </span>
                   <strong>{executionResult.status}</strong>
                 </div>
 
                 <div>
-                  <span className="result-label">Cohort members</span>
+                  <span className="result-label">
+                    Cohort members
+                  </span>
                   <strong className="member-count">
                     {executionResult.member_count.toLocaleString()}
                   </strong>
@@ -452,12 +652,16 @@ function App() {
                 <div>
                   <h3>Add criterion</h3>
                   <p>
-                    Add a supported rule to the selected cohort definition.
+                    Add a supported rule to the selected cohort
+                    definition.
                   </p>
                 </div>
               </div>
 
-              <form className="criterion-form" onSubmit={addCriterion}>
+              <form
+                className="criterion-form"
+                onSubmit={addCriterion}
+              >
                 <div className="form-field">
                   <label htmlFor="criterion-type">Type</label>
                   <select
@@ -465,13 +669,19 @@ function App() {
                     value={criterionType}
                     onChange={handleTypeChange}
                   >
-                    <option value="inclusion">Inclusion</option>
-                    <option value="exclusion">Exclusion</option>
+                    <option value="inclusion">
+                      Inclusion
+                    </option>
+                    <option value="exclusion">
+                      Exclusion
+                    </option>
                   </select>
                 </div>
 
                 <div className="form-field">
-                  <label htmlFor="criterion-domain">Domain</label>
+                  <label htmlFor="criterion-domain">
+                    Domain
+                  </label>
                   <select
                     id="criterion-domain"
                     value={criterionDomain}
@@ -501,7 +711,9 @@ function App() {
                 </div>
 
                 <div className="form-field">
-                  <label htmlFor="criterion-operator">Operator</label>
+                  <label htmlFor="criterion-operator">
+                    Operator
+                  </label>
                   <select
                     id="criterion-operator"
                     value={criterionOperator}
@@ -511,7 +723,10 @@ function App() {
                     }}
                   >
                     {availableOperators.map((operator) => (
-                      <option key={operator} value={operator}>
+                      <option
+                        key={operator}
+                        value={operator}
+                      >
                         {operator}
                       </option>
                     ))}
@@ -519,7 +734,9 @@ function App() {
                 </div>
 
                 <div className="form-field value-field">
-                  <label htmlFor="criterion-value">Value</label>
+                  <label htmlFor="criterion-value">
+                    Value
+                  </label>
                   <input
                     id="criterion-value"
                     type="text"
@@ -537,14 +754,16 @@ function App() {
                   className="add-criterion-button"
                   disabled={criterionSaving}
                 >
-                  {criterionSaving ? "Adding..." : "Add criterion"}
+                  {criterionSaving
+                    ? "Adding..."
+                    : "Add criterion"}
                 </button>
               </form>
 
               {criterionType === "exclusion" && (
                 <p className="form-note">
-                  Cohort Engine v1 supports exclusion criteria only for the
-                  diagnosis domain.
+                  Cohort Engine v1 supports exclusion criteria only
+                  for the diagnosis domain.
                 </p>
               )}
 
@@ -579,7 +798,9 @@ function App() {
               !criteriaError &&
               criteria.length === 0 && (
                 <div className="state-card">
-                  <p>No criteria have been defined for this cohort.</p>
+                  <p>
+                    No criteria have been defined for this cohort.
+                  </p>
                 </div>
               )}
 
@@ -602,8 +823,12 @@ function App() {
 
                     <tbody>
                       {criteria.map((criterion) => (
-                        <tr key={criterion.cohort_criterion_id}>
-                          <td>{criterion.criterion_order}</td>
+                        <tr
+                          key={criterion.cohort_criterion_id}
+                        >
+                          <td>
+                            {criterion.criterion_order}
+                          </td>
 
                           <td>
                             <span
