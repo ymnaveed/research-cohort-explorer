@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import "./App.css";
 
 const API_BASE_URL = "http://127.0.0.1:8000";
+const MEMBER_PAGE_SIZE = 50;
 
 const CRITERION_OPTIONS = {
   demographics: {
@@ -58,6 +59,12 @@ function App() {
 
   const [criterionDeletingId, setCriterionDeletingId] = useState(null);
   const [criterionDeleteError, setCriterionDeleteError] = useState("");
+
+  const [members, setMembers] = useState([]);
+  const [memberCount, setMemberCount] = useState(0);
+  const [memberOffset, setMemberOffset] = useState(0);
+  const [membersLoading, setMembersLoading] = useState(false);
+  const [membersError, setMembersError] = useState("");
 
   useEffect(() => {
     async function loadCohorts() {
@@ -154,6 +161,37 @@ function App() {
     }
   }
 
+  async function loadMembers(cohortId, offset = 0) {
+    setMembersLoading(true);
+    setMembersError("");
+
+    try {
+      const response = await fetch(
+        `${API_BASE_URL}/cohorts/${cohortId}/members?limit=${MEMBER_PAGE_SIZE}&offset=${offset}`,
+      );
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => null);
+
+        throw new Error(
+          errorData?.detail || `API request failed: ${response.status}`,
+        );
+      }
+
+      const data = await response.json();
+
+      setMembers(data.members);
+      setMemberCount(data.member_count);
+      setMemberOffset(data.offset);
+    } catch (err) {
+      setMembers([]);
+      setMemberCount(0);
+      setMembersError(err.message);
+    } finally {
+      setMembersLoading(false);
+    }
+  }
+
   async function openCohort(cohort) {
     setSelectedCohort(cohort);
     setCriteria([]);
@@ -173,10 +211,22 @@ function App() {
     setCriterionDeletingId(null);
     setCriterionDeleteError("");
 
+    setMembers([]);
+    setMemberCount(0);
+    setMemberOffset(0);
+    setMembersError("");
+
+    const criteriaRequest = fetch(
+      `${API_BASE_URL}/cohorts/${cohort.cohort_definition_id}/criteria`,
+    );
+
+    const membersRequest = loadMembers(
+      cohort.cohort_definition_id,
+      0,
+    );
+
     try {
-      const response = await fetch(
-        `${API_BASE_URL}/cohorts/${cohort.cohort_definition_id}/criteria`,
-      );
+      const response = await criteriaRequest;
 
       if (!response.ok) {
         throw new Error(`API request failed: ${response.status}`);
@@ -189,6 +239,8 @@ function App() {
     } finally {
       setCriteriaLoading(false);
     }
+
+    await membersRequest;
   }
 
   async function executeCohort() {
@@ -218,6 +270,11 @@ function App() {
 
       const data = await response.json();
       setExecutionResult(data);
+
+      await loadMembers(
+        selectedCohort.cohort_definition_id,
+        0,
+      );
     } catch (err) {
       setExecutionError(err.message);
     } finally {
@@ -371,6 +428,36 @@ function App() {
     }
   }
 
+  function goToPreviousMemberPage() {
+    if (!selectedCohort || memberOffset === 0) {
+      return;
+    }
+
+    const newOffset = Math.max(
+      0,
+      memberOffset - MEMBER_PAGE_SIZE,
+    );
+
+    loadMembers(
+      selectedCohort.cohort_definition_id,
+      newOffset,
+    );
+  }
+
+  function goToNextMemberPage() {
+    if (
+      !selectedCohort ||
+      memberOffset + MEMBER_PAGE_SIZE >= memberCount
+    ) {
+      return;
+    }
+
+    loadMembers(
+      selectedCohort.cohort_definition_id,
+      memberOffset + MEMBER_PAGE_SIZE,
+    );
+  }
+
   const availableDomains =
     criterionType === "exclusion"
       ? ["diagnosis"]
@@ -382,6 +469,14 @@ function App() {
 
   const availableOperators =
     CRITERION_OPTIONS[criterionDomain][criterionField];
+
+  const memberRangeStart =
+    memberCount === 0 ? 0 : memberOffset + 1;
+
+  const memberRangeEnd = Math.min(
+    memberOffset + members.length,
+    memberCount,
+  );
 
   return (
     <div className="app">
@@ -410,7 +505,10 @@ function App() {
           </div>
 
           <div className="create-cohort-card">
-            <form className="create-cohort-form" onSubmit={createCohort}>
+            <form
+              className="create-cohort-form"
+              onSubmit={createCohort}
+            >
               <div className="form-field cohort-name-field">
                 <label htmlFor="cohort-name">Cohort name</label>
                 <input
@@ -460,7 +558,9 @@ function App() {
               </div>
 
               <div className="form-field">
-                <label htmlFor="cohort-end-date">Study end</label>
+                <label htmlFor="cohort-end-date">
+                  Study end
+                </label>
                 <input
                   id="cohort-end-date"
                   type="date"
@@ -839,7 +939,6 @@ function App() {
                           </td>
 
                           <td>{criterion.domain}</td>
-
                           <td>{criterion.field_name}</td>
 
                           <td>
@@ -874,6 +973,133 @@ function App() {
                   </table>
                 </div>
               )}
+
+            <section className="members-section">
+              <div className="members-header">
+                <div>
+                  <p className="section-eyebrow">
+                    Cohort population
+                  </p>
+                  <h3>Cohort members</h3>
+                  <p className="members-description">
+                    Patient demographics for the currently stored
+                    cohort membership.
+                  </p>
+                </div>
+
+                {!membersLoading && !membersError && (
+                  <div className="members-summary">
+                    <strong>
+                      {memberCount.toLocaleString()}
+                    </strong>
+                    <span>
+                      {memberCount === 1 ? "member" : "members"}
+                    </span>
+                  </div>
+                )}
+              </div>
+
+              {membersLoading && (
+                <div className="state-card">
+                  <p>Loading cohort members...</p>
+                </div>
+              )}
+
+              {membersError && (
+                <div className="state-card error-card">
+                  <h3>Unable to load cohort members</h3>
+                  <p>{membersError}</p>
+                </div>
+              )}
+
+              {!membersLoading &&
+                !membersError &&
+                memberCount === 0 && (
+                  <div className="state-card">
+                    <h3>No cohort members</h3>
+                    <p>
+                      Run this cohort to generate its membership.
+                    </p>
+                  </div>
+                )}
+
+              {!membersLoading &&
+                !membersError &&
+                memberCount > 0 && (
+                  <>
+                    <div className="members-table-wrapper">
+                      <table className="members-table">
+                        <thead>
+                          <tr>
+                            <th>Research ID</th>
+                            <th>Date of birth</th>
+                            <th>Age</th>
+                            <th>Sex</th>
+                            <th>Race</th>
+                            <th>Ethnicity</th>
+                            <th>ZIP3</th>
+                          </tr>
+                        </thead>
+
+                        <tbody>
+                          {members.map((member) => (
+                            <tr key={member.research_id}>
+                              <td>
+                                <strong>
+                                  {member.research_id}
+                                </strong>
+                              </td>
+                              <td>{member.date_of_birth}</td>
+                              <td>
+                                {member.age_at_study_end}
+                              </td>
+                              <td>{member.sex}</td>
+                              <td>{member.race}</td>
+                              <td>{member.ethnicity}</td>
+                              <td>{member.zip3}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+
+                    <div className="members-pagination">
+                      <span>
+                        Showing {memberRangeStart.toLocaleString()}
+                        {"–"}
+                        {memberRangeEnd.toLocaleString()} of{" "}
+                        {memberCount.toLocaleString()}
+                      </span>
+
+                      <div className="pagination-actions">
+                        <button
+                          type="button"
+                          onClick={goToPreviousMemberPage}
+                          disabled={
+                            memberOffset === 0 ||
+                            membersLoading
+                          }
+                        >
+                          Previous
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={goToNextMemberPage}
+                          disabled={
+                            memberOffset +
+                              MEMBER_PAGE_SIZE >=
+                              memberCount ||
+                            membersLoading
+                          }
+                        >
+                          Next
+                        </button>
+                      </div>
+                    </div>
+                  </>
+                )}
+            </section>
           </section>
         )}
       </main>
