@@ -2,7 +2,7 @@
 
 A full-stack research cohort exploration application built with PostgreSQL, FastAPI, React, and Python.
 
-Research Cohort Explorer demonstrates how structured clinical data can be modeled, validated, queried, and exposed through a controlled cohort-building workflow. The project uses a fully synthetic clinical dataset and provides a reusable cohort engine for defining patient populations using demographic and clinical criteria.
+Research Cohort Explorer demonstrates how structured clinical data can be modeled, validated, queried, and exposed through controlled cohort-building and patient-exploration workflows. The project uses a fully synthetic clinical dataset and provides a reusable cohort engine for defining patient populations using demographic and clinical criteria.
 
 > **Important:** All patient and clinical data used by this project is synthetic. The repository does not contain real patient information or protected health information (PHI).
 
@@ -20,6 +20,7 @@ The project was designed as an end-to-end data engineering and analytics applica
 - REST API development
 - automated regression testing
 - React-based cohort management and exploration
+- paginated patient exploration across longitudinal clinical records
 
 The application separates the data, cohort engine, API, and user interface into independent layers.
 
@@ -37,38 +38,57 @@ Cohort details expose the stored criteria, execution results, and paginated synt
 
 ![Research Cohort Explorer cohort details](docs/screenshots/cohort-details.png)
 
+### Patient Explorer
+
+The Patient Explorer provides paginated access to the complete population of 100,000 synthetic patients, including exact Research ID search.
+
+![Research Cohort Explorer patient directory](docs/screenshots/patient-explorer.png)
+
+### Longitudinal Patient Details
+
+Individual patient records expose demographics together with encounters, diagnoses, laboratory results, medications, procedures, and clinical notes.
+
+![Research Cohort Explorer patient details](docs/screenshots/patient-details.png)
+
 ## Architecture
 
 ```text
-┌─────────────────────────────┐
-│       React Frontend        │
-│ Cohorts • Criteria • Results│
-│ Members • API Status        │
-└──────────────┬──────────────┘
-               │ HTTP / JSON
-               ▼
-┌─────────────────────────────┐
-│        FastAPI Backend      │
-│ Validation • API • Execution│
-└──────────────┬──────────────┘
-               │ psycopg
-               ▼
-┌─────────────────────────────┐
-│       PostgreSQL 16         │
-│                             │
-│ Core Clinical Tables        │
-│ Analytical Views            │
-│ Cohort Definitions          │
-│ Criteria Whitelist          │
-│ Cohort Engine               │
-│ Membership + Audit Log      │
-└─────────────────────────────┘
-               ▲
-               │
-┌──────────────┴──────────────┐
-│ Synthetic Data Generators   │
-│          Python             │
-└─────────────────────────────┘
++----------------------------------+
+|          React Frontend          |
+|                                  |
+| Cohorts | Criteria | Results     |
+| Members | Patients | API Status  |
++----------------+-----------------+
+                 |
+              HTTP / JSON
+                 |
+                 v
++----------------------------------+
+|          FastAPI Backend         |
+|                                  |
+| Validation | API | Execution     |
+| Patient and Clinical Retrieval   |
++----------------+-----------------+
+                 |
+               psycopg
+                 |
+                 v
++----------------------------------+
+|          PostgreSQL 16           |
+|                                  |
+| Core Clinical Tables             |
+| Analytical Views                 |
+| Cohort Definitions               |
+| Criteria Whitelist               |
+| Cohort Engine                    |
+| Membership + Audit Log           |
++----------------+-----------------+
+                 ^
+                 |
++----------------+-----------------+
+|     Synthetic Data Generators    |
+|              Python              |
++----------------------------------+
 ```
 
 ## Technology Stack
@@ -117,7 +137,7 @@ The development database contains **100,000 synthetic patients** and more than *
 
 The synthetic study period spans:
 
-**January 1, 2015 – December 31, 2025**
+**January 1, 2015 - December 31, 2025**
 
 Synthetic data generators are located in:
 
@@ -166,7 +186,7 @@ vw_procedures
 vw_clinical_notes
 ```
 
-These views isolate cohort logic from the physical source tables and provide a reusable analytical layer.
+These views isolate application and cohort logic from the physical source tables and provide a reusable analytical layer.
 
 ## Cohort Engine v1
 
@@ -244,9 +264,53 @@ The reproducible cohort definitions are stored in:
 database/seed/demo_cohorts.sql
 ```
 
+## Patient Explorer
+
+The Patient Explorer provides a second application workflow alongside the Cohort Explorer.
+
+It demonstrates how the underlying synthetic clinical population can be explored before or independently of cohort definition.
+
+Current functionality includes:
+
+- browse all **100,000 synthetic patients**
+- server-side pagination with 50 patients per page
+- exact Research ID search
+- patient-level demographic summary
+- longitudinal encounter history
+- diagnosis history
+- laboratory results
+- medication orders
+- procedures
+- clinical notes
+
+Patient-facing API routes and frontend URLs use the synthetic `research_id` rather than exposing the internal numeric patient primary key.
+
+Clinical records are retrieved on demand for the selected patient rather than loading the complete synthetic population into the browser.
+
+This provides a visible connection between:
+
+```text
+100,000 synthetic patients
+        |
+        v
+longitudinal clinical records
+        |
+        v
+relational database + analytical views
+        |
+        v
+cohort criteria
+        |
+        v
+cohort execution
+        |
+        v
+research population
+```
+
 ## Backend API
 
-The FastAPI backend exposes endpoints for health monitoring, cohort management, criteria management, execution, results, and member exploration.
+The FastAPI backend exposes endpoints for health monitoring, cohort management, criteria management, cohort execution, patient exploration, and clinical-record retrieval.
 
 ### Health
 
@@ -291,7 +355,32 @@ limit
 offset
 ```
 
-The API returns research identifiers and analytical demographics rather than exposing the internal patient primary key.
+### Patients
+
+```text
+GET /patients
+GET /patients/{research_id}
+```
+
+Patient directory retrieval supports pagination using:
+
+```text
+limit
+offset
+```
+
+### Patient Clinical Records
+
+```text
+GET /patients/{research_id}/encounters
+GET /patients/{research_id}/diagnoses
+GET /patients/{research_id}/labs
+GET /patients/{research_id}/medications
+GET /patients/{research_id}/procedures
+GET /patients/{research_id}/notes
+```
+
+The API returns synthetic research identifiers and analytical demographics rather than exposing the internal patient primary key.
 
 FastAPI's interactive API documentation is available while the backend is running at:
 
@@ -301,9 +390,15 @@ http://127.0.0.1:8000/docs
 
 ## Frontend Application
 
-The React frontend provides a user interface for the complete cohort workflow.
+The React frontend provides two primary application views:
 
-Current functionality includes:
+```text
+Cohorts | Patients
+```
+
+### Cohort Workflow
+
+The cohort interface supports:
 
 - view available cohorts
 - create a cohort
@@ -314,7 +409,28 @@ Current functionality includes:
 - display cohort member counts
 - browse cohort members
 - paginate through cohort membership
-- display backend/database connection status
+
+### Patient Workflow
+
+The Patient Explorer supports:
+
+- browse the synthetic patient directory
+- view the total synthetic population
+- paginate through 100,000 patients
+- search by exact Research ID
+- open an individual patient record
+- review patient demographics
+- browse encounters
+- browse diagnoses
+- browse laboratory results
+- browse medications
+- browse procedures
+- browse clinical notes
+
+The application also provides:
+
+- backend/database connection status
+- loading and error states
 - responsive layout
 
 The API status indicator uses the database health endpoint rather than displaying a hardcoded connection state.
@@ -323,39 +439,40 @@ The API status indicator uses the database health endpoint rather than displayin
 
 ```text
 research-cohort-explorer/
-│
-├── backend/
-│   └── app/
-│       ├── database.py
-│       └── main.py
-│
-├── database/
-│   ├── cohort_engine/
-│   ├── queries/
-│   ├── schema/
-│   ├── seed/
-│   │   └── demo_cohorts.sql
-│   ├── views/
-│   └── init.sql
-│
-├── docs/
-│   ├── database-validation.md
-│   └── week-1-summary.md
-│
-├── frontend/
-│   ├── public/
-│   └── src/
-│
-├── synthetic-data/
-│
-├── tests/
-│   ├── test_api.py
-│   └── test_cohort_engine.sql
-│
-├── .env.example
-├── .gitignore
-├── docker-compose.yml
-└── README.md
+|
++-- backend/
+|   +-- app/
+|       +-- database.py
+|       +-- main.py
+|
++-- database/
+|   +-- cohort_engine/
+|   +-- queries/
+|   +-- schema/
+|   +-- seed/
+|   |   +-- demo_cohorts.sql
+|   +-- views/
+|   +-- init.sql
+|
++-- docs/
+|   +-- screenshots/
+|   +-- database-validation.md
+|   +-- week-1-summary.md
+|
++-- frontend/
+|   +-- public/
+|   +-- src/
+|
++-- synthetic-data/
+|
++-- tests/
+|   +-- test_api.py
+|   +-- test_cohort_engine.sql
+|
++-- .env.example
++-- .gitignore
++-- docker-compose.yml
++-- README.md
 ```
 
 ## Local Development Setup
@@ -501,6 +618,8 @@ Frontend:
 http://localhost:5173
 ```
 
+If the default Vite port is already in use, Vite may automatically select another local port.
+
 ## Testing
 
 ### Backend API Tests
@@ -508,14 +627,16 @@ http://localhost:5173
 Run:
 
 ```powershell
-.\.venv\Scripts\python.exe -m pytest tests/test_api.py -q
+.\.venv\Scripts\python.exe -m pytest tests\test_api.py -q
 ```
 
 Current regression suite:
 
 ```text
-24 passed
+33 passed
 ```
+
+The API tests cover the cohort workflow as well as Patient Explorer directory, demographics, and clinical-domain endpoints.
 
 ### Cohort Engine Database Tests
 
@@ -579,6 +700,9 @@ The project includes validation across multiple layers:
 - duplicate criterion-order handling
 - pagination validation
 - invalid date handling
+- invalid patient handling
+- patient directory pagination
+- patient clinical-record retrieval
 
 Additional database validation details are documented in:
 
@@ -605,6 +729,9 @@ Validation occurs at the database, cohort-engine, API, and test layers rather th
 **Synthetic by design**  
 The application demonstrates clinical data engineering patterns without requiring real patient data.
 
+**Server-side population access**  
+Large patient and cohort-member populations are paginated through the API rather than loaded into the browser as a single dataset.
+
 ## Current Scope
 
 Cohort Engine v1 intentionally supports a controlled set of cohort operations rather than unrestricted query construction.
@@ -616,9 +743,12 @@ Current limitations include:
 - exclusions limited to diagnosis criteria
 - no timestamp-based laboratory/procedure/encounter date criteria
 - supported fields and operators limited to the whitelist
+- exact Research ID search rather than advanced patient filtering
+- Patient Explorer is read-only
+- no patient-level charts or exports
 - local development authentication only; production authentication and authorization are outside the current scope
 
-These constraints keep cohort execution predictable, testable, and safe while providing a foundation for future expansion.
+These constraints keep cohort execution and patient exploration predictable, testable, and safe while providing a foundation for future expansion.
 
 ## Future Enhancements
 
@@ -631,6 +761,8 @@ Potential future extensions include:
 - cohort export
 - saved cohort comparison
 - execution history visualization
+- advanced patient search and filtering
+- patient-level visualization
 - authentication and authorization
 - containerized backend/frontend deployment
 - CI/CD regression testing

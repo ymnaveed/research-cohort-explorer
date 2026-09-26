@@ -552,3 +552,341 @@ def delete_cohort_criterion(
         "cohort_definition_id": cohort_id,
         "cohort_criterion_id": criterion_id,
     }
+@app.get("/patients")
+def list_patients(
+    limit: int = Query(default=50, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
+):
+    with get_connection() as connection:
+        with connection.cursor(row_factory=dict_row) as cursor:
+            cursor.execute(
+                """
+                SELECT COUNT(*) AS patient_count
+                FROM vw_patient_demographics
+                """
+            )
+            result = cursor.fetchone()
+
+            cursor.execute(
+                """
+                SELECT
+                    research_id,
+                    date_of_birth,
+                    age_at_study_end,
+                    sex,
+                    race,
+                    ethnicity,
+                    zip3,
+                    death_date
+                FROM vw_patient_demographics
+                ORDER BY research_id
+                LIMIT %s
+                OFFSET %s
+                """,
+                (
+                    limit,
+                    offset,
+                ),
+            )
+            patients = cursor.fetchall()
+
+    return {
+        "patient_count": result["patient_count"],
+        "limit": limit,
+        "offset": offset,
+        "patients": patients,
+    }
+@app.get("/patients/{research_id}")
+def get_patient(research_id: str):
+    with get_connection() as connection:
+        with connection.cursor(row_factory=dict_row) as cursor:
+            cursor.execute(
+                """
+                SELECT
+                    research_id,
+                    date_of_birth,
+                    age_at_study_end,
+                    sex,
+                    race,
+                    ethnicity,
+                    zip3,
+                    death_date
+                FROM vw_patient_demographics
+                WHERE research_id = %s
+                """,
+                (research_id,),
+            )
+            patient = cursor.fetchone()
+
+    if patient is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Patient not found",
+        )
+
+    return patient    
+@app.get("/patients/{research_id}/encounters")
+def get_patient_encounters(research_id: str):
+    with get_connection() as connection:
+        with connection.cursor(row_factory=dict_row) as cursor:
+            cursor.execute(
+                """
+                SELECT research_id
+                FROM vw_patient_demographics
+                WHERE research_id = %s
+                """,
+                (research_id,),
+            )
+
+            if cursor.fetchone() is None:
+                raise HTTPException(
+                    status_code=404,
+                    detail="Patient not found",
+                )
+
+            cursor.execute(
+                """
+                SELECT
+                    encounter_id,
+                    encounter_date,
+                    encounter_type_code,
+                    encounter_type_description,
+                    encounter_category,
+                    facility_code,
+                    facility_name,
+                    facility_type,
+                    facility_city,
+                    facility_state,
+                    provider_code,
+                    provider_type,
+                    provider_specialty,
+                    discharge_date
+                FROM vw_encounters
+                WHERE research_id = %s
+                ORDER BY encounter_date DESC, encounter_id DESC
+                """,
+                (research_id,),
+            )
+            encounters = cursor.fetchall()
+
+    return {
+        "research_id": research_id,
+        "encounter_count": len(encounters),
+        "encounters": encounters,
+    }
+@app.get("/patients/{research_id}/diagnoses")
+def get_patient_diagnoses(research_id: str):
+    with get_connection() as connection:
+        with connection.cursor(row_factory=dict_row) as cursor:
+            cursor.execute(
+                """
+                SELECT research_id
+                FROM vw_patient_demographics
+                WHERE research_id = %s
+                """,
+                (research_id,),
+            )
+
+            if cursor.fetchone() is None:
+                raise HTTPException(
+                    status_code=404,
+                    detail="Patient not found",
+                )
+
+            cursor.execute(
+                """
+                SELECT
+                    diagnosis_id,
+                    encounter_id,
+                    diagnosis_code,
+                    diagnosis_description,
+                    diagnosis_category,
+                    onset_date,
+                    recorded_date,
+                    diagnosis_type
+                FROM vw_diagnoses
+                WHERE research_id = %s
+                ORDER BY recorded_date DESC, diagnosis_id DESC
+                """,
+                (research_id,),
+            )
+            diagnoses = cursor.fetchall()
+
+    return {
+        "research_id": research_id,
+        "diagnosis_count": len(diagnoses),
+        "diagnoses": diagnoses,
+    }
+@app.get("/patients/{research_id}/labs")
+def get_patient_labs(research_id: str):
+    with get_connection() as connection:
+        with connection.cursor(row_factory=dict_row) as cursor:
+            cursor.execute(
+                """
+                SELECT research_id
+                FROM vw_patient_demographics
+                WHERE research_id = %s
+                """,
+                (research_id,),
+            )
+
+            if cursor.fetchone() is None:
+                raise HTTPException(
+                    status_code=404,
+                    detail="Patient not found",
+                )
+
+            cursor.execute(
+                """
+                SELECT
+                    lab_result_id,
+                    encounter_id,
+                    test_code,
+                    test_name,
+                    result_numeric,
+                    result_text,
+                    unit,
+                    default_unit,
+                    result_date
+                FROM vw_lab_results
+                WHERE research_id = %s
+                ORDER BY result_date DESC, lab_result_id DESC
+                """,
+                (research_id,),
+            )
+            labs = cursor.fetchall()
+
+    return {
+        "research_id": research_id,
+        "lab_result_count": len(labs),
+        "lab_results": labs,
+    }
+@app.get("/patients/{research_id}/medications")
+def get_patient_medications(research_id: str):
+    with get_connection() as connection:
+        with connection.cursor(row_factory=dict_row) as cursor:
+            cursor.execute(
+                """
+                SELECT research_id
+                FROM vw_patient_demographics
+                WHERE research_id = %s
+                """,
+                (research_id,),
+            )
+
+            if cursor.fetchone() is None:
+                raise HTTPException(
+                    status_code=404,
+                    detail="Patient not found",
+                )
+
+            cursor.execute(
+                """
+                SELECT
+                    medication_order_id,
+                    encounter_id,
+                    medication_code,
+                    medication_name,
+                    medication_class,
+                    order_date,
+                    start_date,
+                    end_date,
+                    dose,
+                    route,
+                    status
+                FROM vw_medication_orders
+                WHERE research_id = %s
+                ORDER BY order_date DESC, medication_order_id DESC
+                """,
+                (research_id,),
+            )
+            medications = cursor.fetchall()
+
+    return {
+        "research_id": research_id,
+        "medication_count": len(medications),
+        "medications": medications,
+    }
+@app.get("/patients/{research_id}/procedures")
+def get_patient_procedures(research_id: str):
+    with get_connection() as connection:
+        with connection.cursor(row_factory=dict_row) as cursor:
+            cursor.execute(
+                """
+                SELECT research_id
+                FROM vw_patient_demographics
+                WHERE research_id = %s
+                """,
+                (research_id,),
+            )
+
+            if cursor.fetchone() is None:
+                raise HTTPException(
+                    status_code=404,
+                    detail="Patient not found",
+                )
+
+            cursor.execute(
+                """
+                SELECT
+                    procedure_id,
+                    encounter_id,
+                    procedure_code,
+                    procedure_name,
+                    procedure_category,
+                    procedure_date
+                FROM vw_procedures
+                WHERE research_id = %s
+                ORDER BY procedure_date DESC, procedure_id DESC
+                """,
+                (research_id,),
+            )
+            procedures = cursor.fetchall()
+
+    return {
+        "research_id": research_id,
+        "procedure_count": len(procedures),
+        "procedures": procedures,
+    }
+@app.get("/patients/{research_id}/notes")
+def get_patient_notes(research_id: str):
+    with get_connection() as connection:
+        with connection.cursor(row_factory=dict_row) as cursor:
+            cursor.execute(
+                """
+                SELECT research_id
+                FROM vw_patient_demographics
+                WHERE research_id = %s
+                """,
+                (research_id,),
+            )
+
+            if cursor.fetchone() is None:
+                raise HTTPException(
+                    status_code=404,
+                    detail="Patient not found",
+                )
+
+            cursor.execute(
+                """
+                SELECT
+                    note_id,
+                    encounter_id,
+                    note_date,
+                    note_type_code,
+                    note_type_description,
+                    note_category,
+                    note_text
+                FROM vw_clinical_notes
+                WHERE research_id = %s
+                ORDER BY note_date DESC, note_id DESC
+                """,
+                (research_id,),
+            )
+            notes = cursor.fetchall()
+
+    return {
+        "research_id": research_id,
+        "note_count": len(notes),
+        "notes": notes,
+    }

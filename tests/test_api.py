@@ -585,3 +585,159 @@ def test_get_cohort_members_rejects_invalid_pagination():
     response = client.get("/cohorts/1/members?limit=5&offset=-1")
 
     assert response.status_code == 422
+def test_list_patients():
+    response = client.get("/patients?limit=5&offset=0")
+
+    assert response.status_code == 200
+
+    data = response.json()
+
+    assert data["patient_count"] == 100000
+    assert data["limit"] == 5
+    assert data["offset"] == 0
+    assert len(data["patients"]) == 5
+
+    first_patient = data["patients"][0]
+
+    assert first_patient == {
+        "research_id": "P-000001",
+        "date_of_birth": "1988-10-17",
+        "age_at_study_end": 37,
+        "sex": "M",
+        "race": "White",
+        "ethnicity": "Not Hispanic or Latino",
+        "zip3": "547",
+        "death_date": None,
+    }
+def test_get_patient():
+    response = client.get("/patients/P-000001")
+
+    assert response.status_code == 200
+
+    data = response.json()
+
+    assert data == {
+        "research_id": "P-000001",
+        "date_of_birth": "1988-10-17",
+        "age_at_study_end": 37,
+        "sex": "M",
+        "race": "White",
+        "ethnicity": "Not Hispanic or Latino",
+        "zip3": "547",
+        "death_date": None,
+    }
+
+
+def test_get_patient_not_found():
+    response = client.get("/patients/P-999999")
+
+    assert response.status_code == 404
+    assert response.json() == {
+        "detail": "Patient not found",
+    }    
+def test_get_patient_encounters():
+    response = client.get("/patients/P-000001/encounters")
+
+    assert response.status_code == 200
+
+    data = response.json()
+
+    assert data["research_id"] == "P-000001"
+    assert data["encounter_count"] == 19
+    assert len(data["encounters"]) == 19
+
+    first_encounter = data["encounters"][0]
+
+    assert first_encounter["encounter_id"] == 19
+    assert first_encounter["encounter_date"] == "2025-10-13T10:24:04"
+    assert first_encounter["encounter_type_code"] == "TELEHEALTH"
+def test_get_patient_diagnoses():
+    response = client.get("/patients/P-000001/diagnoses")
+
+    assert response.status_code == 200
+
+    data = response.json()
+
+    assert data["research_id"] == "P-000001"
+    assert data["diagnosis_count"] == 1
+    assert len(data["diagnoses"]) == 1
+
+    diagnosis = data["diagnoses"][0]
+
+    assert diagnosis["diagnosis_code"] == "I10"
+    assert diagnosis["diagnosis_description"] == "Essential hypertension"
+    assert diagnosis["diagnosis_category"] == "Cardiovascular"
+    assert diagnosis["diagnosis_type"] == "PRIMARY"
+    assert diagnosis["recorded_date"] == "2019-08-07"
+def test_get_patient_labs():
+    response = client.get("/patients/P-000001/labs")
+
+    assert response.status_code == 200
+
+    data = response.json()
+
+    assert data["research_id"] == "P-000001"
+    assert data["lab_result_count"] == 19
+    assert len(data["lab_results"]) == 19
+
+    first_lab = data["lab_results"][0]
+
+    assert first_lab["test_code"] == "HDL"
+    assert first_lab["test_name"] == "HDL Cholesterol"
+    assert first_lab["result_date"] == "2025-03-14T19:48:08"
+    assert first_lab["unit"] == "mg/dL"
+def test_get_patient_medications():
+    response = client.get("/patients/P-000001/medications")
+
+    assert response.status_code == 200
+
+    data = response.json()
+
+    assert data["research_id"] == "P-000001"
+    assert data["medication_count"] == 2
+    assert len(data["medications"]) == 2
+
+    first_medication = data["medications"][0]
+
+    assert first_medication["medication_code"] == "LISINOPRIL"
+    assert first_medication["medication_name"] == "Lisinopril"
+    assert first_medication["medication_class"] == "ACE Inhibitor"
+    assert first_medication["dose"] == "10 mg"
+    assert first_medication["route"] == "ORAL"
+    assert first_medication["status"] == "DISCONTINUED"
+def test_get_patient_procedures():
+    response = client.get("/patients/P-000001/procedures")
+
+    assert response.status_code == 200
+
+    data = response.json()
+
+    assert data["research_id"] == "P-000001"
+    assert data["procedure_count"] == 3
+    assert len(data["procedures"]) == 3
+
+    first_procedure = data["procedures"][0]
+
+    assert first_procedure["procedure_code"] == "ECG"
+    assert first_procedure["procedure_name"] == "Electrocardiogram"
+    assert first_procedure["procedure_category"] == "Cardiology"
+    assert first_procedure["procedure_date"] == "2025-10-13T07:29:55"
+def test_get_patient_notes():
+    response = client.get("/patients/P-000001/notes")
+
+    assert response.status_code == 200
+
+    data = response.json()
+
+    assert data["research_id"] == "P-000001"
+    assert data["note_count"] == 26
+    assert len(data["notes"]) == 26
+
+    first_note = data["notes"][0]
+
+    assert first_note["note_id"] == 26
+    assert first_note["encounter_id"] == 19
+    assert first_note["note_type_code"] == "PROGRESS"
+    assert first_note["note_type_description"] == "Progress Note"
+    assert first_note["note_category"] == "Clinical"
+    assert first_note["note_date"] == "2025-10-13T12:14:04"
