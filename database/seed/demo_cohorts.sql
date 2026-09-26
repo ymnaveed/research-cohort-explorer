@@ -12,6 +12,7 @@
 --
 -- The script is idempotent for the cohort names below:
 -- existing demo cohorts are reused rather than duplicated.
+-- Demo cohort metadata is normalized to active status.
 -- Criteria are replaced with the canonical definitions.
 -- Cohort membership is rebuilt using execute_cohort().
 -- ============================================================
@@ -160,7 +161,7 @@ SELECT
     DATE '2015-01-01',
     DATE '2025-12-31',
     1,
-    'draft'
+    'active'
 WHERE NOT EXISTS (
     SELECT 1
     FROM cohort_definitions
@@ -239,7 +240,7 @@ SELECT
     DATE '2015-01-01',
     DATE '2025-12-31',
     1,
-    'draft'
+    'active'
 WHERE NOT EXISTS (
     SELECT 1
     FROM cohort_definitions
@@ -296,7 +297,7 @@ SELECT
     DATE '2015-01-01',
     DATE '2025-12-31',
     1,
-    'draft'
+    'active'
 WHERE NOT EXISTS (
     SELECT 1
     FROM cohort_definitions
@@ -353,7 +354,7 @@ SELECT
     DATE '2015-01-01',
     DATE '2025-12-31',
     1,
-    'draft'
+    'active'
 WHERE NOT EXISTS (
     SELECT 1
     FROM cohort_definitions
@@ -410,7 +411,7 @@ SELECT
     DATE '2015-01-01',
     DATE '2025-12-31',
     1,
-    'draft'
+    'active'
 WHERE NOT EXISTS (
     SELECT 1
     FROM cohort_definitions
@@ -469,6 +470,26 @@ FROM cohort_definitions
 WHERE cohort_name = 'Hypertension Without Type 2 Diabetes'
 ORDER BY cohort_definition_id
 LIMIT 1;
+
+
+-- ============================================================
+-- Normalize demo cohort status
+-- ============================================================
+--
+-- INSERT ... WHERE NOT EXISTS preserves existing cohort rows.
+-- Therefore, explicitly set the canonical demo cohorts to active
+-- so rerunning this seed also normalizes existing installations.
+
+UPDATE cohort_definitions
+SET status = 'active'
+WHERE cohort_name IN (
+    'Adult Type 2 Diabetes',
+    'Elevated HbA1c',
+    'Metformin Users',
+    'Echocardiogram Patients',
+    'Emergency Department Patients',
+    'Hypertension Without Type 2 Diabetes'
+);
 
 
 -- ============================================================
