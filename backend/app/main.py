@@ -1,6 +1,6 @@
 from datetime import date
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from psycopg.rows import dict_row
@@ -193,6 +193,78 @@ def get_cohort_results(cohort_id: int):
     }
 
 
+@app.get("/cohorts/{cohort_id}/members")
+def get_cohort_members(
+    cohort_id: int,
+    limit: int = Query(default=50, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
+):
+    with get_connection() as connection:
+        with connection.cursor(row_factory=dict_row) as cursor:
+            cursor.execute(
+                """
+                SELECT
+                    cohort_definition_id,
+                    cohort_name
+                FROM cohort_definitions
+                WHERE cohort_definition_id = %s
+                """,
+                (cohort_id,),
+            )
+            cohort = cursor.fetchone()
+
+            if cohort is None:
+                raise HTTPException(
+                    status_code=404,
+                    detail="Cohort not found",
+                )
+
+            cursor.execute(
+                """
+                SELECT COUNT(*) AS member_count
+                FROM cohort_membership
+                WHERE cohort_definition_id = %s
+                """,
+                (cohort_id,),
+            )
+            result = cursor.fetchone()
+
+            cursor.execute(
+                """
+                SELECT
+                    p.research_id,
+                    p.date_of_birth,
+                    p.age_at_study_end,
+                    p.sex,
+                    p.race,
+                    p.ethnicity,
+                    p.zip3
+                FROM cohort_membership cm
+                JOIN vw_patient_demographics p
+                  ON p.patient_id = cm.patient_id
+                WHERE cm.cohort_definition_id = %s
+                ORDER BY p.research_id
+                LIMIT %s
+                OFFSET %s
+                """,
+                (
+                    cohort_id,
+                    limit,
+                    offset,
+                ),
+            )
+            members = cursor.fetchall()
+
+    return {
+        "cohort_definition_id": cohort["cohort_definition_id"],
+        "cohort_name": cohort["cohort_name"],
+        "member_count": result["member_count"],
+        "limit": limit,
+        "offset": offset,
+        "members": members,
+    }
+
+
 @app.post("/cohorts/{cohort_id}/execute")
 def execute_cohort_endpoint(cohort_id: int):
     with get_connection() as connection:
@@ -294,7 +366,10 @@ def create_cohort_criterion(
     ):
         raise HTTPException(
             status_code=400,
-            detail="Cohort Engine v1 supports exclusions only for diagnosis criteria",
+            detail=(
+                "Cohort Engine v1 supports exclusions only "
+                "for diagnosis criteria"
+            ),
         )
 
     with get_connection() as connection:
@@ -363,7 +438,10 @@ def create_cohort_criterion(
                 if not value_validation["is_valid"]:
                     raise HTTPException(
                         status_code=400,
-                        detail=f"Invalid value for criterion type {value_type}",
+                        detail=(
+                            "Invalid value for criterion type "
+                            f"{value_type}"
+                        ),
                     )
 
             cursor.execute(
@@ -382,7 +460,10 @@ def create_cohort_criterion(
             if cursor.fetchone() is not None:
                 raise HTTPException(
                     status_code=409,
-                    detail="Criterion order already exists for this cohort",
+                    detail=(
+                        "Criterion order already exists "
+                        "for this cohort"
+                    ),
                 )
 
             cursor.execute(
@@ -421,6 +502,8 @@ def create_cohort_criterion(
             created_criterion = cursor.fetchone()
 
     return created_criterion
+
+
 @app.delete("/cohorts/{cohort_id}/criteria/{criterion_id}")
 def delete_cohort_criterion(
     cohort_id: int,

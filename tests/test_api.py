@@ -528,3 +528,60 @@ def test_delete_cohort_criterion_cohort_not_found():
     assert response.json() == {
         "detail": "Cohort not found",
     }
+def test_get_cohort_members():
+    response = client.get("/cohorts/1/members?limit=5&offset=0")
+
+    assert response.status_code == 200
+
+    data = response.json()
+
+    assert data["cohort_definition_id"] == 1
+    assert data["cohort_name"] == "Adult Type 2 Diabetes"
+    assert data["member_count"] == 6620
+    assert data["limit"] == 5
+    assert data["offset"] == 0
+    assert len(data["members"]) == 5
+
+    first_member = data["members"][0]
+
+    assert first_member == {
+        "research_id": "P-000026",
+        "date_of_birth": "1961-12-05",
+        "age_at_study_end": 64,
+        "sex": "M",
+        "race": "Asian",
+        "ethnicity": "Hispanic or Latino",
+        "zip3": "544",
+    }
+
+
+def test_get_cohort_members_offset():
+    response = client.get("/cohorts/1/members?limit=1&offset=1")
+
+    assert response.status_code == 200
+
+    data = response.json()
+
+    assert data["limit"] == 1
+    assert data["offset"] == 1
+    assert len(data["members"]) == 1
+    assert data["members"][0]["research_id"] == "P-000034"
+
+
+def test_get_cohort_members_not_found():
+    response = client.get("/cohorts/999999/members")
+
+    assert response.status_code == 404
+    assert response.json() == {
+        "detail": "Cohort not found",
+    }
+
+
+def test_get_cohort_members_rejects_invalid_pagination():
+    response = client.get("/cohorts/1/members?limit=101&offset=0")
+
+    assert response.status_code == 422
+
+    response = client.get("/cohorts/1/members?limit=5&offset=-1")
+
+    assert response.status_code == 422
