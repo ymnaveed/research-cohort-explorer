@@ -48,6 +48,9 @@ function App() {
   const [criterionSaving, setCriterionSaving] = useState(false);
   const [criterionSaveError, setCriterionSaveError] = useState("");
 
+  const [criterionDeletingId, setCriterionDeletingId] = useState(null);
+  const [criterionDeleteError, setCriterionDeleteError] = useState("");
+
   useEffect(() => {
     async function loadCohorts() {
       try {
@@ -84,6 +87,9 @@ function App() {
     setCriterionOperator("=");
     setCriterionValue("");
     setCriterionSaveError("");
+
+    setCriterionDeletingId(null);
+    setCriterionDeleteError("");
 
     try {
       const response = await fetch(
@@ -164,8 +170,7 @@ function App() {
 
   function handleFieldChange(event) {
     const newField = event.target.value;
-    const firstOperator =
-      CRITERION_OPTIONS[criterionDomain][newField][0];
+    const firstOperator = CRITERION_OPTIONS[criterionDomain][newField][0];
 
     setCriterionField(newField);
     setCriterionOperator(firstOperator);
@@ -240,6 +245,45 @@ function App() {
       setCriterionSaveError(err.message);
     } finally {
       setCriterionSaving(false);
+    }
+  }
+
+  async function deleteCriterion(criterionId) {
+    if (!selectedCohort) {
+      return;
+    }
+
+    setCriterionDeletingId(criterionId);
+    setCriterionDeleteError("");
+
+    try {
+      const response = await fetch(
+        `${API_BASE_URL}/cohorts/${selectedCohort.cohort_definition_id}/criteria/${criterionId}`,
+        {
+          method: "DELETE",
+        },
+      );
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => null);
+
+        throw new Error(
+          errorData?.detail || `API request failed: ${response.status}`,
+        );
+      }
+
+      setCriteria((currentCriteria) =>
+        currentCriteria.filter(
+          (criterion) => criterion.cohort_criterion_id !== criterionId,
+        ),
+      );
+
+      setExecutionResult(null);
+      setExecutionError("");
+    } catch (err) {
+      setCriterionDeleteError(err.message);
+    } finally {
+      setCriterionDeletingId(null);
     }
   }
 
@@ -511,6 +555,13 @@ function App() {
               )}
             </section>
 
+            {criterionDeleteError && (
+              <div className="state-card error-card execution-message">
+                <h3>Unable to delete criterion</h3>
+                <p>{criterionDeleteError}</p>
+              </div>
+            )}
+
             {criteriaLoading && (
               <div className="state-card">
                 <p>Loading criteria...</p>
@@ -545,6 +596,7 @@ function App() {
                         <th>Field</th>
                         <th>Operator</th>
                         <th>Value</th>
+                        <th>Action</th>
                       </tr>
                     </thead>
 
@@ -570,6 +622,27 @@ function App() {
                           </td>
 
                           <td>{criterion.value_text}</td>
+
+                          <td>
+                            <button
+                              type="button"
+                              className="delete-criterion-button"
+                              onClick={() =>
+                                deleteCriterion(
+                                  criterion.cohort_criterion_id,
+                                )
+                              }
+                              disabled={
+                                criterionDeletingId ===
+                                criterion.cohort_criterion_id
+                              }
+                            >
+                              {criterionDeletingId ===
+                              criterion.cohort_criterion_id
+                                ? "Deleting..."
+                                : "Delete"}
+                            </button>
+                          </td>
                         </tr>
                       ))}
                     </tbody>

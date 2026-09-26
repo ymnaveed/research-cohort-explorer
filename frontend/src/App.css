@@ -571,3 +571,34 @@
     grid-template-columns: 1fr;
   }
 }
+/* Delete criterion */
+
+.delete-criterion-button {
+  padding: 7px 11px;
+  color: #b91c1c;
+  background: #ffffff;
+  border: 1px solid #fecaca;
+  border-radius: 7px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  white-space: nowrap;
+  transition:
+    background 150ms ease,
+    border-color 150ms ease,
+    opacity 150ms ease;
+}
+
+.delete-criterion-button:hover:not(:disabled) {
+  background: #fef2f2;
+  border-color: #fca5a5;
+}
+
+.delete-criterion-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.delete-criterion-button:focus-visible {
+  outline: 3px solid rgba(185, 28, 28, 0.15);
+  outline-offset: 2px;
+}
